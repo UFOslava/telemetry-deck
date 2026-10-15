@@ -1,0 +1,95 @@
+import os
+import json
+import asyncio
+from dotenv import load_dotenv
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.middleware.cors import CORSMiddleware
+
+# Load .env from workspace root or current dir
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+load_dotenv()
+
+from app.config import settings
+from app.services.dem_extractor import fetch_terrarium_tile
+from app.services.traffic_poller import fetch_tomtom_traffic, cached_traffic
+
+app = FastAPI(title="Tactical Holographic Telemetry Deck API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "yokneam_elevation_512.json")
+active_connections = set()
+
+@app.on_event("startup")
+async def startup_event():
+    # Initial traffic fetch
+    asyncio.create_task(periodic_traffic_poller())
+
+async def periodic_traffic_poller():
+    while True:
+        await fetch_tomtom_traffic()
+        # Sleep for 5 minutes (300 seconds)
+        await asyncio.sleep(settings.TRAFFIC_POLL_INTERVAL)
+
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "online",
+        "center": {
+            "lat": settings.CENTER_LAT,
+            "lon": settings.CENTER_LON,
+            "radius_km": settings.RADIUS_KM
+        },
+        "tomtom_configured": bool(settings.get_tomtom_key())
+    }
+
+@app.get("/api/elevation")
+async def get_elevation_grid():
+    if os.path.exists(DATA_PATH):
+        with open(DATA_PATH, "r") as f:
+            return json.load(f)
+    elev, bounds = fetch_terrarium_tile(settings.CENTER_LAT, settings.CENTER_LON, zoom=11)
+    return {
+        "bounds": bounds,
+        "shape": list(elev.shape),
+        "min_elevation": float(elev.min()),
+        "max_elevation": float(elev.max()),
+        "elevations": elev.tolist()
+    }
+
+@app.get("/api/traffic/flow")
+async def get_traffic_flow():
+    return await fetch_tomtom_traffic()
+
+@app.get("/api/roads/tomtom")
+async def get_tomtom_roads():
+    tomtom_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "data", "tomtom_roads.json")
+    if os.path.exists(tomtom_path):
+        with open(tomtom_path, "r") as f:
+            return json.load(f)
+    return {"elements": [], "source": "empty"}
+
+@app.websocket("/ws/telemetry")
+async def telemetry_websocket(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.add(websocket)
+    try:
+        await websocket.send_json({
+            "type": "init",
+            "center": {
+                "lat": settings.CENTER_LAT,
+                "lon": settings.CENTER_LON,
+                "radius_km": settings.RADIUS_KM
+            },
+            "tomtom_active": bool(settings.get_tomtom_key())
+        })
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)

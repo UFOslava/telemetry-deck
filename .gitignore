@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vite/
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+*.tif
+contours.geojson
+.DS_Store
