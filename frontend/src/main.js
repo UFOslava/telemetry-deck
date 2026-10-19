@@ -103,43 +103,10 @@ const roadManager = new RoadNetworkManager(scene, currentConfig);
 // Train Station Manager (Exact surveyed Kfar Yehoshua coordinates & 30m countdown flag)
 const stationManager = new TrainStationManager(scene, camera, svgOverlay, currentConfig);
 
-// Elevated Bus Route Inspection Plane (elevated 1.5x higher with 40% background dimming)
+// Bus route inspection overlay: its own circle/grid/route pane above the map.
+// It does not touch the main terrain compass circle (polarGrid).
 const routeInspectionPlane = new RouteInspectionPlane(scene, camera, {
-  onSelect: (bus) => {
-    // Fade terrain contours and roads below by 40% (multiplier = 0.6)
-    if (contoursMesh) {
-      contoursMesh.material.opacity = currentConfig.contourOpacity * 0.6;
-      contoursMesh.material.needsUpdate = true;
-    }
-    roadManager.setDimmed(true);
-
-    // 4) Add encompassing perimeter circle to the grid view, and limit the grid within!
-    if (bus && bus.roadPath && bus.roadPath.length > 0) {
-      let maxDist = 0;
-      bus.roadPath.forEach(pt => {
-        const d = Math.hypot(pt.x, pt.z);
-        if (d > maxDist) maxDist = d;
-      });
-      // Comfortable tactical bounding perimeter
-      const encompassingR = Math.min(currentConfig.radiusKm, Math.max(2.2, maxDist + 0.45));
-      scene.remove(polarGrid);
-      polarGrid = createPolarGrid(encompassingR, Math.max(0.5, encompassingR / 4), 12, { isEncompassing: true });
-      scene.add(polarGrid);
-    }
-  },
-  onClear: () => {
-    // Restore normal opacity
-    if (contoursMesh) {
-      contoursMesh.material.opacity = currentConfig.contourOpacity;
-      contoursMesh.material.needsUpdate = true;
-    }
-    roadManager.setDimmed(false);
-
-    // Restore full polar grid
-    scene.remove(polarGrid);
-    polarGrid = createPolarGrid(currentConfig.radiusKm, currentConfig.radiusKm / 4, 12);
-    scene.add(polarGrid);
-  }
+  radiusKm: currentConfig.radiusKm
 });
 
 // Contours Layer (4-quadrant stitched DEM)
@@ -172,12 +139,7 @@ function rebuildContours() {
     contoursMesh.geometry.dispose();
     contoursMesh.material.dispose();
   }
-  const isInspecting = routeInspectionPlane && routeInspectionPlane.selectedBus;
-  const effectiveConfig = {
-    ...currentConfig,
-    contourOpacity: isInspecting ? currentConfig.contourOpacity * 0.6 : currentConfig.contourOpacity
-  };
-  contoursMesh = buildContourMesh(elevationData, effectiveConfig);
+  contoursMesh = buildContourMesh(elevationData, currentConfig);
   scene.add(contoursMesh);
 }
 
@@ -417,6 +379,65 @@ function animate() {
     camReadout.textContent = cameraController.isIdle
       ? 'CAMERA: IDLE ROTATION ACTIVE'
       : `CAMERA: INACTIVITY TIMER (${(cameraController.getIdleElapsed() / 1000).toFixed(1)}s / 30s)`;
+  }
+}
+
+// Dev-only inspection hook (used by headless UI checks; absent in prod builds).
+if (import.meta.env.DEV) {
+  window.__deckDebug = {
+    selectBus: (i = 0) => {
+      const buses = activeTransitEntities.filter(e => e.type === 'transit');
+      if (!buses.length) return null;
+      const bus = buses[i % buses.length];
+      routeInspectionPlane.selectBus(bus);
+      return bus.callsign;
+    },
+    clear: () => routeInspectionPlane.clear(),
+    state: () => {
+      const d = routeInspectionPlane.dynamicGroup;
+      const ribbon = d.children.find(o => o.isMesh && o.geometry?.attributes?.position?.count > 4);
+      let maxR = 0;
+      const ys = new Set();
+      if (ribbon) {
+        const a = ribbon.geometry.attributes.position.array;
+        for (let i = 0; i < a.length; i += 3) {
+          maxR = Math.max(maxR, Math.hypot(a[i], a[i + 2]));
+          ys.add(a[i + 1].toFixed(3));
+        }
+      }
+      return {
+        selected: routeInspectionPlane.selectedBus?.callsign || null,
+        overlayVisible: routeInspectionPlane.group.visible,
+        staticChildren: routeInspectionPlane.staticGroup.children.length,
+        dynamicChildren: d.children.length,
+        planeHeight: routeInspectionPlane.planeHeight,
+        overlayRadius: routeInspectionPlane.overlayRadius,
+        routeMaxRadius: +maxR.toFixed(3),
+        routeYValues: [...ys],
+        polarGridInScene: scene.children.includes(polarGrid),
+        polarGridChildren: polarGrid.children.length,
+        busCount: activeTransitEntities.filter(e => e.type === 'transit').length,
+        roadRoutes: roadManager.continuousRoutes.length,
+        railPaths: roadManager.railwayPaths.length,
+        entities: activeTransitEntities.length
+      };
+    }
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('inspect')) {
+    const idx = parseInt(params.get('inspect'), 10) || 0;
+    const timer = setInterval(() => {
+      const buses = activeTransitEntities.filter(e => e.type === 'transit');
+      if (!buses.length) return;
+      clearInterval(timer);
+      routeInspectionPlane.selectBus(buses[idx % buses.length]);
+      const el = document.createElement('div');
+      el.id = 'debug-state';
+      el.style.display = 'none';
+      el.textContent = JSON.stringify(window.__deckDebug.state());
+      document.body.appendChild(el);
+    }, 250);
   }
 }
 
