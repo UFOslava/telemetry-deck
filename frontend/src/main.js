@@ -257,7 +257,6 @@ function initTransitVehicles() {
 
   activeTransitEntities = entities;
   pinsManager.setEntities(entities);
-  spatialFlagsManager.updateEntities(entities);
 
   const countReadout = document.getElementById('target-count-readout');
   if (countReadout) {
@@ -363,8 +362,6 @@ function animate() {
 
   // Smooth physical transit simulation along road vectors
   pinsManager.updateSimulation(delta, roadManager, sampleElevation);
-
-  stationManager.update3DPositions(cameraController.yaw);
 
   celestialManager.checkHover();
 
