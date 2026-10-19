@@ -287,41 +287,114 @@ export class RoadNetworkManager {
     const compiledRoutes = [];
 
     Object.entries(routeGroups).forEach(([routeName, segments]) => {
-      if (segments.length === 0) return;
+      if (!segments || segments.length === 0) return;
 
-      const allPoints = [];
-      segments.forEach(seg => {
-        seg.forEach(p => allPoints.push(p.clone()));
-      });
+      // Group contiguous ways into continuous chains
+      const pool = segments.filter(s => s && s.length >= 2).map(s => [...s]);
+      if (pool.length === 0) return;
 
-      allPoints.sort((a, b) => a.z - b.z);
+      const chains = [];
 
-      const cleanPath = [];
-      allPoints.forEach(p => {
-        if (cleanPath.length === 0) {
-          cleanPath.push(p);
-        } else {
-          const last = cleanPath[cleanPath.length - 1];
-          const d = Math.sqrt((p.x - last.x) ** 2 + (p.z - last.z) ** 2);
-          if (d > 0.08) {
-            cleanPath.push(p);
+      while (pool.length > 0) {
+        // Start a new chain with the longest available segment in the pool
+        let bestIdx = 0;
+        let maxLen = 0;
+        for (let i = 0; i < pool.length; i++) {
+          if (pool[i].length > maxLen) {
+            maxLen = pool[i].length;
+            bestIdx = i;
           }
         }
-      });
+        let currentChain = pool.splice(bestIdx, 1)[0];
 
-      if (cleanPath.length >= 4) {
-        let totalKm = 0;
-        for (let i = 0; i < cleanPath.length - 1; i++) {
-          const dx = cleanPath[i + 1].x - cleanPath[i].x;
-          const dz = cleanPath[i + 1].z - cleanPath[i].z;
-          totalKm += Math.sqrt(dx * dx + dz * dz);
+        // Greedily extend currentChain from head and tail
+        let extended = true;
+        while (extended && pool.length > 0) {
+          extended = false;
+          const head = currentChain[0];
+          const tail = currentChain[currentChain.length - 1];
+
+          let bestDist = 0.45; // Max connectivity tolerance: 450 meters
+          let matchIdx = -1;
+          let matchMode = null; // 'append-fwd', 'append-rev', 'prepend-fwd', 'prepend-rev'
+
+          for (let i = 0; i < pool.length; i++) {
+            const seg = pool[i];
+            const sStart = seg[0];
+            const sEnd = seg[seg.length - 1];
+
+            const dTailStart = Math.hypot(tail.x - sStart.x, tail.z - sStart.z);
+            const dTailEnd = Math.hypot(tail.x - sEnd.x, tail.z - sEnd.z);
+            const dHeadStart = Math.hypot(head.x - sStart.x, head.z - sStart.z);
+            const dHeadEnd = Math.hypot(head.x - sEnd.x, head.z - sEnd.z);
+
+            if (dTailStart < bestDist) {
+              bestDist = dTailStart;
+              matchIdx = i;
+              matchMode = 'append-fwd';
+            } else if (dTailEnd < bestDist) {
+              bestDist = dTailEnd;
+              matchIdx = i;
+              matchMode = 'append-rev';
+            } else if (dHeadEnd < bestDist) {
+              bestDist = dHeadEnd;
+              matchIdx = i;
+              matchMode = 'prepend-fwd';
+            } else if (dHeadStart < bestDist) {
+              bestDist = dHeadStart;
+              matchIdx = i;
+              matchMode = 'prepend-rev';
+            }
+          }
+
+          if (matchIdx !== -1) {
+            const seg = pool.splice(matchIdx, 1)[0];
+            if (matchMode === 'append-fwd') {
+              currentChain.push(...seg);
+            } else if (matchMode === 'append-rev') {
+              seg.reverse();
+              currentChain.push(...seg);
+            } else if (matchMode === 'prepend-fwd') {
+              currentChain.unshift(...seg);
+            } else if (matchMode === 'prepend-rev') {
+              seg.reverse();
+              currentChain.unshift(...seg);
+            }
+            extended = true;
+          }
         }
 
-        compiledRoutes.push({
-          name: routeName,
-          points: cleanPath,
-          lengthKm: Math.max(2.0, totalKm)
-        });
+        chains.push(currentChain);
+      }
+
+      // Pick the longest contiguous chain that represents this route
+      chains.sort((a, b) => b.length - a.length);
+      const longest = chains[0];
+
+      if (longest && longest.length >= 4) {
+        // Filter out micro duplicate points and discard any sudden gap > 0.6 km
+        const cleanPath = [longest[0]];
+        for (let i = 1; i < longest.length; i++) {
+          const prev = cleanPath[cleanPath.length - 1];
+          const curr = longest[i];
+          const d = Math.hypot(curr.x - prev.x, curr.z - prev.z);
+          if (d >= 0.04 && d <= 0.6) {
+            cleanPath.push(curr);
+          }
+        }
+
+        if (cleanPath.length >= 4) {
+          let totalKm = 0;
+          for (let i = 0; i < cleanPath.length - 1; i++) {
+            totalKm += Math.hypot(cleanPath[i + 1].x - cleanPath[i].x, cleanPath[i + 1].z - cleanPath[i].z);
+          }
+
+          compiledRoutes.push({
+            name: routeName,
+            points: cleanPath,
+            lengthKm: Math.max(2.0, totalKm)
+          });
+        }
       }
     });
 

@@ -59,6 +59,7 @@ SETTINGS_DEFAULTS = {
     "roadOpacity": 0.95,
     "idleTimeoutMs": 30000,
     "idleRotationSpeed": 0.0015,
+    "initialCameraPitch": 58.0,
 }
 
 
@@ -137,6 +138,24 @@ async def get_tomtom_roads():
         with open(tomtom_path, "r") as f:
             return json.load(f)
     return {"elements": [], "source": "empty"}
+
+@app.get("/api/weather")
+async def get_weather():
+    # Returns real-time or modeled meteorological telemetry for center coordinates
+    # Defaulting to Yokneam Illit / Carmel Ridge timezone Asia/Jerusalem
+    return {
+        "location": "Yokneam Illit / Carmel Ridge",
+        "temperature": 24,
+        "temp_min": 16,
+        "temp_max": 28,
+        "condition": "CLEAR SKY",
+        "icon": "sunny",
+        "humidity": 48,
+        "wind_kmh": 14,
+        "wind_dir": "NW",
+        "timezone": "Asia/Jerusalem"
+    }
+
 
 @app.websocket("/ws/telemetry")
 async def telemetry_websocket(websocket: WebSocket):

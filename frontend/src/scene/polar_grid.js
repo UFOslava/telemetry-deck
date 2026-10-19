@@ -1,38 +1,39 @@
 import * as THREE from 'three';
 import { createHUDText } from './vector_font.js';
 
-export function createPolarGrid(maxRadius = 10.0, ringInterval = 2.5, spokeCount = 12) {
+export function createPolarGrid(maxRadius = 10.0, ringInterval = 2.5, spokeCount = 12, options = {}) {
   const group = new THREE.Group();
+  const isEncompassing = !!options.isEncompassing;
 
   const mutedNavy = 0x0e3866;
   const mediumCobalt = 0x154c8a;
-  const brightCyan = 0x00e5ff;
+  const brightCyan = isEncompassing ? 0x00e5ff : 0x00e5ff;
 
   const innerGridMat = new THREE.LineBasicMaterial({
     color: mutedNavy,
     transparent: true,
-    opacity: 0.55,
+    opacity: isEncompassing ? 0.65 : 0.55,
     blending: THREE.AdditiveBlending
   });
 
   const primaryGridMat = new THREE.LineBasicMaterial({
     color: mediumCobalt,
     transparent: true,
-    opacity: 0.75,
+    opacity: isEncompassing ? 0.85 : 0.75,
     blending: THREE.AdditiveBlending
   });
 
   const perimeterMat = new THREE.LineBasicMaterial({
     color: brightCyan,
     transparent: true,
-    opacity: 0.95,
+    opacity: isEncompassing ? 1.0 : 0.95,
     blending: THREE.AdditiveBlending
   });
 
   // Concentric Rings
-  const numRings = Math.round(maxRadius / ringInterval);
+  const numRings = Math.max(2, Math.round(maxRadius / ringInterval));
   for (let i = 1; i <= numRings; i++) {
-    const r = i * ringInterval;
+    const r = (i / numRings) * maxRadius;
     const isPerimeter = i === numRings;
     const segments = 128;
     const positions = [];
@@ -46,6 +47,29 @@ export function createPolarGrid(maxRadius = 10.0, ringInterval = 2.5, spokeCount
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     const mat = isPerimeter ? perimeterMat : (i % 2 === 0 ? primaryGridMat : innerGridMat);
     group.add(new THREE.Line(geo, mat));
+
+    // If encompassing perimeter, add secondary outer ring for tactical emphasis
+    if (isPerimeter && isEncompassing) {
+      const encPositions = [];
+      const rOuter = maxRadius + 0.12;
+      for (let j = 0; j <= segments; j++) {
+        const theta = (j / segments) * Math.PI * 2;
+        encPositions.push(Math.cos(theta) * rOuter, 0.02, Math.sin(theta) * rOuter);
+      }
+      const encGeo = new THREE.BufferGeometry();
+      encGeo.setAttribute('position', new THREE.Float32BufferAttribute(encPositions, 3));
+      const encMat = new THREE.LineDashedMaterial({
+        color: 0xffe600,
+        dashSize: 0.3,
+        gapSize: 0.2,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending
+      });
+      const encLine = new THREE.Line(encGeo, encMat);
+      encLine.computeLineDistances();
+      group.add(encLine);
+    }
 
     // Add perimeter ticks (every 5 degrees = 72 ticks)
     if (isPerimeter) {

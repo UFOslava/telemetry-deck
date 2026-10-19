@@ -191,6 +191,11 @@
         </div>
       </div>
 
+      <div class="form-group">
+        <label>Initial Camera View Angle (° Pitch from Horizon)</label>
+        <input type="number" step="1" min="15" max="85" id="cfg-camera-pitch" value="58" required />
+      </div>
+
       <div class="actions">
         <div class="status-msg" id="status-msg"></div>
         <button type="submit" class="btn" id="save-btn">SAVE & BROADCAST</button>
@@ -223,6 +228,7 @@
         roadVal.textContent = `${Math.round(data.roadOpacity * 100)}%`;
         document.getElementById('cfg-idle-timeout').value = Math.round(data.idleTimeoutMs / 1000);
         document.getElementById('cfg-idle-speed').value = String(data.idleRotationSpeed);
+        document.getElementById('cfg-camera-pitch').value = data.initialCameraPitch !== undefined ? data.initialCameraPitch : 58;
       } catch (err) {
         document.getElementById('status-msg').textContent = 'Failed to load settings: ' + err.message;
       }
@@ -242,6 +248,7 @@
         roadOpacity: parseInt(roadSlider.value, 10) / 100,
         idleTimeoutMs: parseInt(document.getElementById('cfg-idle-timeout').value, 10) * 1000,
         idleRotationSpeed: parseFloat(document.getElementById('cfg-idle-speed').value),
+        initialCameraPitch: parseFloat(document.getElementById('cfg-camera-pitch').value),
       };
 
       try {

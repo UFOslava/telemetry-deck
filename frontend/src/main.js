@@ -29,7 +29,8 @@ const DEFAULT_CONFIG = {
   roadColor: 0xffe600,
   roadOpacity: 0.95,
   idleTimeoutMs: 30000,
-  idleRotationSpeed: 0.0015
+  idleRotationSpeed: 0.0015,
+  initialCameraPitch: 58.0
 };
 
 // Kiosk / headless: load tactical parameters FROM DISK at boot (served by the backend
@@ -72,7 +73,7 @@ const cameraController = new CameraController(camera, renderer.domElement, {
   idleRotationSpeed: currentConfig.idleRotationSpeed,
   idleTimeoutMs: currentConfig.idleTimeoutMs,
   distance: currentConfig.radiusKm * 1.95,
-  pitch: 58 * Math.PI / 180
+  pitch: ((currentConfig.initialCameraPitch !== undefined ? currentConfig.initialCameraPitch : 58) * Math.PI) / 180
 });
 
 // Postprocessing Bloom (Essential for 3D holographic sheen)
@@ -106,13 +107,27 @@ const spatialFlagsManager = new SpatialFlagsManager(scene, camera, svgOverlay, {
 
 // Elevated Bus Route Inspection Plane (elevated 1.5x higher with 40% background dimming)
 const routeInspectionPlane = new RouteInspectionPlane(scene, camera, {
-  onSelect: () => {
+  onSelect: (bus) => {
     // Fade terrain contours and roads below by 40% (multiplier = 0.6)
     if (contoursMesh) {
       contoursMesh.material.opacity = currentConfig.contourOpacity * 0.6;
       contoursMesh.material.needsUpdate = true;
     }
     roadManager.setDimmed(true);
+
+    // 4) Add encompassing perimeter circle to the grid view, and limit the grid within!
+    if (bus && bus.roadPath && bus.roadPath.length > 0) {
+      let maxDist = 0;
+      bus.roadPath.forEach(pt => {
+        const d = Math.hypot(pt.x, pt.z);
+        if (d > maxDist) maxDist = d;
+      });
+      // Comfortable tactical bounding perimeter
+      const encompassingR = Math.min(currentConfig.radiusKm, Math.max(2.2, maxDist + 0.45));
+      scene.remove(polarGrid);
+      polarGrid = createPolarGrid(encompassingR, Math.max(0.5, encompassingR / 4), 12, { isEncompassing: true });
+      scene.add(polarGrid);
+    }
   },
   onClear: () => {
     // Restore normal opacity
@@ -121,6 +136,11 @@ const routeInspectionPlane = new RouteInspectionPlane(scene, camera, {
       contoursMesh.material.needsUpdate = true;
     }
     roadManager.setDimmed(false);
+
+    // Restore full polar grid
+    scene.remove(polarGrid);
+    polarGrid = createPolarGrid(currentConfig.radiusKm, currentConfig.radiusKm / 4, 12);
+    scene.add(polarGrid);
   }
 });
 
@@ -335,10 +355,30 @@ document.getElementById('open-settings-btn')?.addEventListener('click', () => {
   window.location.href = '/settings';
 });
 
-// Deselect route on ESC key
+// Deselect route on ESC key or clicking in the empty spot
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     routeInspectionPlane.clear();
+  }
+});
+
+let pointerDownPos = { x: 0, y: 0 };
+window.addEventListener('pointerdown', (e) => {
+  pointerDownPos = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('pointerup', (e) => {
+  const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+  if (dist < 6) { // Click, not a drag
+    if (e.target.closest('#transit-route-panel') ||
+        e.target.closest('.hud-target-tag') ||
+        e.target.closest('.hud-btn') ||
+        e.target.closest('#celestial-tooltip') ||
+        e.target.closest('.iss-target-tag')) {
+      return;
+    }
+    if (routeInspectionPlane && routeInspectionPlane.selectedBus) {
+      routeInspectionPlane.clear();
+    }
   }
 });
 
@@ -357,8 +397,8 @@ function animate() {
   cameraController.update(delta);
   roadManager.animate(delta);
 
-  // Animate the 45° curved perimeter bar (visualizes 30s inactivity countdown with striped fill)
-  cylinderHUD.animate(delta, cameraController.yaw, cameraController.getIdleElapsed(), cameraController.isIdle);
+  // 5) Animate the 8-segment 45° outer cylinder spinning separately from the camera around the map
+  cylinderHUD.animate(delta, cameraController.getIdleElapsed(), cameraController.isIdle);
 
   celestialManager.updateSatellites(delta);
 
@@ -374,8 +414,50 @@ function animate() {
   // Render 3D WebGL scene through UnrealBloomPass
   composer.render();
 
-  // Clear 2D SVG overlay since all text is now rendered in pure 3D WebGL lines (Option 1)
-  svgOverlay.innerHTML = '';
+  // 7) Make an ISS SVG icon follow ISS direction when it's above the horizon
+  const issData = celestialManager.getISSScreenPosition(window.innerWidth, window.innerHeight);
+  let svgContent = '';
+  if (issData) {
+    const sx = Math.round(issData.x);
+    const sy = Math.round(issData.y);
+    if (sx >= 10 && sx <= window.innerWidth - 10 && sy >= 10 && sy <= window.innerHeight - 10) {
+      svgContent += `
+        <g class="iss-target-tag" style="cursor: pointer; pointer-events: auto;">
+          <!-- Target reticle -->
+          <circle cx="${sx}" cy="${sy}" r="18" fill="rgba(0, 229, 255, 0.08)" stroke="#00e5ff" stroke-width="1.2" stroke-dasharray="3,2" />
+          <circle cx="${sx}" cy="${sy}" r="4" fill="none" stroke="#ffe600" stroke-width="1.2" />
+          <circle cx="${sx}" cy="${sy}" r="1.5" fill="#ffe600" />
+          
+          <!-- Detailed ISS Vector SVG Icon -->
+          <!-- Central Truss Structure -->
+          <line x1="${sx - 14}" y1="${sy}" x2="${sx + 14}" y2="${sy}" stroke="#e0f7fa" stroke-width="1.8" />
+          
+          <!-- Pressurized Core Module -->
+          <rect x="${sx - 3}" y="${sy - 6}" width="6" height="12" fill="#020916" stroke="#00e5ff" stroke-width="1" rx="1" />
+          <line x1="${sx}" y1="${sy - 8}" x2="${sx}" y2="${sy + 8}" stroke="#00e5ff" stroke-width="1" />
+
+          <!-- Left Solar Arrays (Port) -->
+          <rect x="${sx - 16}" y="${sy - 12}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
+          <line x1="${sx - 13.5}" y1="${sy - 12}" x2="${sx - 13.5}" y2="${sy - 2}" stroke="#ffe600" stroke-width="0.5" />
+          <rect x="${sx - 16}" y="${sy + 2}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
+          <line x1="${sx - 13.5}" y1="${sy + 2}" x2="${sx - 13.5}" y2="${sy + 12}" stroke="#ffe600" stroke-width="0.5" />
+
+          <!-- Right Solar Arrays (Starboard) -->
+          <rect x="${sx + 11}" y="${sy - 12}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
+          <line x1="${sx + 13.5}" y1="${sy - 12}" x2="${sx + 13.5}" y2="${sy - 2}" stroke="#ffe600" stroke-width="0.5" />
+          <rect x="${sx + 11}" y="${sy + 2}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
+          <line x1="${sx + 13.5}" y1="${sy + 2}" x2="${sx + 13.5}" y2="${sy + 12}" stroke="#ffe600" stroke-width="0.5" />
+
+          <!-- Tactical HUD Tag Readout -->
+          <line x1="${sx + 16}" y1="${sy - 12}" x2="${sx + 36}" y2="${sy - 26}" stroke="#00e5ff" stroke-width="1" opacity="0.8" />
+          <rect x="${sx + 36}" y="${sy - 38}" width="124" height="25" fill="rgba(1, 15, 30, 0.9)" stroke="#00e5ff" stroke-width="1" rx="2" />
+          <text x="${sx + 42}" y="${sy - 27}" fill="#ffe600" font-size="9" font-family="'Courier New', monospace" font-weight="bold">ISS (ZARYA) [LEO]</text>
+          <text x="${sx + 42}" y="${sy - 17}" fill="#00e5ff" font-size="8" font-family="'Courier New', monospace">ALT 418KM | ${issData.altDeg}° EL</text>
+        </g>
+      `;
+    }
+  }
+  svgOverlay.innerHTML = svgContent;
 
   const camReadout = document.getElementById('camera-mode-readout');
   if (camReadout) {

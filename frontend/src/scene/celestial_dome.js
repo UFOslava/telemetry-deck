@@ -415,4 +415,30 @@ export class CelestialDomeManager {
       if (popup) popup.style.display = 'none';
     }
   }
+
+  getISSScreenPosition(width, height) {
+    const issEntry = this.satelliteMeshes.find(s => s.sat.id === 'SAT-01');
+    if (!issEntry || !issEntry.mesh.visible) return null;
+
+    const v = new THREE.Vector3();
+    issEntry.mesh.getWorldPosition(v);
+    v.project(this.camera);
+
+    // Behind the camera frustum?
+    if (v.z > 1.0) return null;
+
+    const screenX = (v.x * 0.5 + 0.5) * width;
+    const screenY = (-(v.y * 0.5) + 0.5) * height;
+
+    return {
+      x: screenX,
+      y: screenY,
+      sat: issEntry.sat,
+      altDeg: issEntry.sat.currentAltDeg || '42.0',
+      azmDeg: issEntry.sat.currentAzmDeg || '128.5',
+      slantKm: issEntry.sat.currentSlantRangeKm || 512,
+      visible: true
+    };
+  }
 }
+
