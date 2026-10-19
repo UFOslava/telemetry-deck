@@ -99,6 +99,12 @@ finally {
             & taskkill /PID $proc.Id /T /F 2>$null | Out-Null
         }
     }
+    Start-Sleep -Milliseconds 500
+    # Safety net: a reloader/worker pair can outlive its parent on Windows.
+    foreach ($port in @($FrontendPort, $BackendPort)) {
+        Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+            ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+    }
     Write-Step "Stopped."
 }
 exit $ExitCode
