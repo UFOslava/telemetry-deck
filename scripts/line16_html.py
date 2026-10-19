@@ -43,7 +43,7 @@ speed_pts = ' '.join(
 )
 
 rows = ''.join(
-    f'<tr><td>{s["seq"]}</td><td>{s["name"]}</td><td>{s["arrival"]}</td><td>{s["est_arrival"]}</td><td>{s["sim_arrival"]}</td><td>{s["chain_km"]:.2f}</td></tr>'
+    f'<tr><td>{s["seq"]}</td><td>{s["name"]}</td><td>{s["arrival"]}</td><td>{s["est_arrival"]}</td><td>{s["sim_arrival"]}</td><td>{s["sim_depart"]}</td><td>{s["chain_km"]:.2f}</td></tr>'
     for s in D['stops'])
 
 html = '''<!doctype html>
@@ -86,17 +86,17 @@ __STOPS__
 <div class="zoom"><button id="zin">+</button><button id="zout">−</button><button id="fit">FIT</button><span>wheel / drag</span></div></div>
 <div class="side">
 <div class="card"><div class="big" id="clock">--:--</div>
-<div>TIME <span id="state">RUNNING</span> · <span id="speed">0</span> km/h</div>
+<div>TIME <span id="state">RUNNING</span> · <span id="speed">0</span> km/h · ELEV <span id="elev">--</span> m · DWELL 10s</div>
 <label><input type="checkbox" id="delay"> apply +__DELAY__s delay</label>
 <button id="play">PAUSE</button></div>
-<div class="card"><b>LINE 16</b><br>__ROUTE__<br>__START__ → __END__<br>path __PATHKM__ km</div>
+<div class="card"><b>LINE 16</b><br>__ROUTE__<br>__START__ → __END__<br>path __PATHKM__ km · elev __ELEVMIN__–__ELEVMAX__ m</div>
 <div class="card"><b>SPEED PROFILE (km/h)</b><br>
 <svg width="220" height="130" viewBox="0 0 220 130">
 <line class="grid" x1="10" y1="120" x2="210" y2="120"/><line class="grid" x1="10" y1="10" x2="10" y2="120"/>
 <text x="14" y="16">__VMAX__</text><text x="180" y="132">time</text>
 <polyline points="__SPEED__" fill="none" stroke="#ffe600" stroke-width="1.6"/>
 </svg></div>
-<div class="card"><b>STOPS / SCHEDULE</b><table><tr><th>#</th><th>stop</th><th>sched</th><th>est</th><th>sim</th><th>km</th></tr>__ROWS__</table></div>
+<div class="card"><b>STOPS / SCHEDULE</b><table><tr><th>#</th><th>stop</th><th>sched</th><th>est</th><th>sim</th><th>dep</th><th>km</th></tr>__ROWS__</table></div>
 </div></div>
 <script>
 const D=__DATA__;
@@ -116,6 +116,7 @@ document.getElementById('zout').onclick=()=>{z=Math.max(1,z/1.3); applyMap();};
 document.getElementById('fit').onclick=()=>{z=1; tx=0; ty=0; applyMap();};
 const clock=document.getElementById('clock');
 const speedEl=document.getElementById('speed');
+const elevEl=document.getElementById('elev');
 const stateEl=document.getElementById('state');
 const delayEl=document.getElementById('delay');
 const playEl=document.getElementById('play');
@@ -136,7 +137,7 @@ function frame(now){
   const eff=delayEl.checked?Math.max(0,simT-D.delay_s):simT;
   const s=sampleAt(eff);
   bus.setAttribute('cx',s.sx); bus.setAttribute('cy',s.sy);
-  clock.textContent=fmt(eff); speedEl.textContent=Math.round(s.v);
+  clock.textContent=fmt(eff); speedEl.textContent=Math.round(s.v); elevEl.textContent=Math.round(s.ground_y/3.0*1000);
   requestAnimationFrame(frame);
 }
 playEl.onclick=()=>{playing=!playing; playEl.textContent=playing?'PAUSE':'PLAY'; stateEl.textContent=playing?'RUNNING':'PAUSED';};
@@ -154,7 +155,9 @@ html = (html.replace('__ROADS__', ''.join(road_svg))
             .replace('__END__', D['scheduled_end'][11:19])
             .replace('__ROUTE__', D['route_name'])
             .replace('__PATHKM__', str(D['path_km']))
-            .replace('__VMAX__', f'{vmax:.0f}'))
+            .replace('__VMAX__', f'{vmax:.0f}')
+            .replace('__ELEVMIN__', str(round(min(D['path_y'])/3*1000)))
+            .replace('__ELEVMAX__', str(round(max(D['path_y'])/3*1000))))
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(html)
 print('wrote', OUT, len(html), 'bytes', 'vmax', vmax)

@@ -215,27 +215,42 @@ def main():
         f = 0 if span <= 0 else (frac - cum[lo]) / span
         return us[lo] + (us[hi] - us[lo]) * f
 
+    # DEM height: GTFS shapes carry no elevation, so sample the deck's terrain.
+    DEM = json.loads((ROOT / 'frontend/public/data/yokneam_elevation_512.json').read_text())
+    db = DEM['bounds']; de = DEM['elevations']; dh = len(de); dw = len(de[0])
+    def elev_km(lat, lon):
+        py = int((db['lat_max'] - lat) / (db['lat_max'] - db['lat_min']) * dh)
+        px = int((lon - db['lon_min']) / (db['lon_max'] - db['lon_min']) * dw)
+        py = max(0, min(dh - 1, py)); px = max(0, min(dw - 1, px))
+        return de[py][px] / 1000.0 * 3.0
+
     samples = []
-    sim_times = [times[0]]
-    t_cursor = times[0]
+    sim_arr = [times[0]]
+    sim_dep = []
+    DWELL_S = 10
     MIN_KMH = 50.0
-    for i in range(len(stops) - 1):
+    for i in range(len(stops)):
+        arr = sim_arr[i]
+        lat_i, lon_i = interpolate(path, chain, stop_chain[i])
+        for k in range(0 if i == 0 else 2, DWELL_S + 1, 2):
+            samples.append({'t': round(arr + k - t0, 1), 's': round(stop_chain[i], 1), 'lat': lat_i, 'lon': lon_i})
+        sim_dep.append(arr + DWELL_S)
+        if i == len(stops) - 1:
+            break
         D = stop_chain[i+1] - stop_chain[i]
-        T = times[i+1] - times[i]
-        # GTFS has a 6s gap on one leg; cap the implied speed at 50 km/h.
-        T_eff = max(T, D / (MIN_KMH / 3.6)) if D > 0 else T
-        sim_times.append(t_cursor + T_eff)
+        T = times[i+1] - times[i] - DWELL_S
+        T_eff = max(T, D / (MIN_KMH / 3.6)) if D > 0 else max(0.0, T)
         if D <= 0.1 or T_eff <= 0:
-            t_cursor += T_eff
+            sim_arr.append(sim_dep[i] + max(0.0, T_eff))
             continue
         steps = max(1, int(T_eff / 2))
-        for k in range(steps + 1):
+        for k in range(1, steps + 1):
             frac = k / steps
-            t = t_cursor + frac * T_eff
+            t = sim_dep[i] + frac * T_eff
             s = stop_chain[i] + u_at(frac) * D
             lat, lon = interpolate(path, chain, s)
             samples.append({'t': round(t - t0, 1), 's': round(s, 1), 'lat': lat, 'lon': lon})
-        t_cursor += T_eff
+        sim_arr.append(sim_dep[i] + T_eff)
     # speed from finite differences
     for i, smp in enumerate(samples):
         if i == 0: smp['v'] = 0.0
@@ -255,18 +270,24 @@ def main():
         'route_name': "מסוף קניון ג'י/רציפים <-> קריית החינוך",
         'scheduled_start': dt.datetime.fromisoformat(stops[0]['arrival_time']).astimezone(ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
         'scheduled_end': dt.datetime.fromisoformat(stops[-1]['arrival_time']).astimezone(ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
-        'delay_s': DELAY_S, 'path_km': round(total_m / 1000, 2),
+        'delay_s': DELAY_S, 'dwell_s': DWELL_S, 'path_km': round(total_m / 1000, 2),
+        'path_y': [round(elev_km(a, b), 3) for a, b in path],
         'stops': [{
             'seq': s['stop_sequence'], 'name': s['gtfs_stop__name'], 'code': s['gtfs_stop__code'],
             'lat': s['gtfs_stop__lat'], 'lon': s['gtfs_stop__lon'],
             'arrival': dt.datetime.fromisoformat(s['arrival_time']).astimezone(ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
             'est_arrival': dt.datetime.fromtimestamp(times[i], ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
-            'sim_arrival': dt.datetime.fromtimestamp(sim_times[i], ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
+            'sim_arrival': dt.datetime.fromtimestamp(sim_arr[i], ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
+            'sim_depart': dt.datetime.fromtimestamp(sim_dep[i], ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
+            'y': round(elev_km(s['gtfs_stop__lat'], s['gtfs_stop__lon']) + 0.04, 3),
+            'elev_m': round(elev_km(s['gtfs_stop__lat'], s['gtfs_stop__lon']) / 3.0 * 1000.0, 1),
             'chain_km': round(stop_chain[i] / 1000, 3),
             'xy': xy((s['gtfs_stop__lat'], s['gtfs_stop__lon']))
         } for i, s in enumerate(stops)],
         'path': [list(xy(p)) for p in path],
-        'samples': [dict(s, xy=xy((s['lat'], s['lon']))) for s in samples],
+        'samples': [dict(s, xy=xy((s['lat'], s['lon'])),
+                         ground_y=round(elev_km(s['lat'], s['lon']), 3),
+                         y=round(elev_km(s['lat'], s['lon']) + 0.04, 3)) for s in samples],
         'roads': []
     }
     # draw only roads near the route
