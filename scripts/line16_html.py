@@ -7,8 +7,8 @@ SRC = ROOT / 'frontend/public/data/line16_test.json'
 OUT = ROOT / 'frontend/public/debug/line16.html'
 D = json.loads(SRC.read_text())
 
-W, H = 1000, 680
-MAP_W, MAP_H = 740, 640
+W, H = 1240, 820
+MAP_W, MAP_H = 900, 760
 OX, OY = 20, 20
 pts = [[p[0], p[1]] for p in D['path']]
 for seg in D['roads']:
@@ -23,7 +23,7 @@ def P(x, y):
 road_svg = []
 for seg in D['roads']:
     ps = ' '.join(f'{P(x,y)[0]:.1f},{P(x,y)[1]:.1f}' for x, y in seg)
-    road_svg.append(f'<polyline class="road" points="{ps}"/>')
+    road_svg.append(f'<polyline class="road" points="{ps}" vector-effect="non-scaling-stroke"/>')
 path_pts = ' '.join(f'{P(x,y)[0]:.1f},{P(x,y)[1]:.1f}' for x, y in D['path'])
 for s in D['stops']:
     s['sx'], s['sy'] = P(s['xy'][0], s['xy'][1])
@@ -43,7 +43,7 @@ speed_pts = ' '.join(
 )
 
 rows = ''.join(
-    f'<tr><td>{s["seq"]}</td><td>{s["name"]}</td><td>{s["arrival"]}</td><td>{s["sim_arrival"]}</td><td>{s["chain_km"]:.2f}</td></tr>'
+    f'<tr><td>{s["seq"]}</td><td>{s["name"]}</td><td>{s["arrival"]}</td><td>{s["est_arrival"]}</td><td>{s["sim_arrival"]}</td><td>{s["chain_km"]:.2f}</td></tr>'
     for s in D['stops'])
 
 html = '''<!doctype html>
@@ -51,7 +51,7 @@ html = '''<!doctype html>
 <style>
 body{margin:0;background:#01050d;color:#bdefff;font-family:"Courier New",monospace}
 .wrap{display:flex;height:100vh}
-.map{width:760px;flex:0 0 760px;border-right:1px solid #0e3866}
+.map{width:900px;flex:0 0 900px;border-right:1px solid #0e3866;position:relative}
 .side{flex:1;padding:12px;overflow:auto}
 h1{font-size:15px;letter-spacing:2px;color:#00e5ff;margin:10px 16px 2px}
 .sub{font-size:10px;color:#70d8ff;margin:0 16px 8px}
@@ -65,6 +65,9 @@ text{fill:#70d8ff;font-size:10px}
 .card{border:1px solid #0e3866;padding:8px;margin:8px 0;background:rgba(1,15,30,.55)}
 .big{font-size:22px;color:#00e5ff}
 .warn{color:#ffb300}
+.zoom{position:absolute;left:16px;bottom:16px;display:flex;gap:6px;align-items:center;z-index:5}
+.zoom button{background:#0e3866;color:#00e5ff;border:1px solid #00e5ff;padding:4px 9px;font-family:inherit;cursor:pointer}
+.zoom span{font-size:10px;color:#70d8ff}
 table{border-collapse:collapse;width:100%;font-size:10px}
 td,th{padding:2px 4px;border-bottom:1px solid #0e3866;text-align:left}
 th{color:#00e5ff}
@@ -72,12 +75,15 @@ label{font-size:11px;color:#ffe600}
 </style></head><body>
 <div class="wrap">
 <div class="map"><h1>LINE 16 — YOKNEAM ILIT</h1><div class="sub">TomTom path reconstruction · timetable · bell speed profile</div>
-<svg width="760" height="660" viewBox="0 0 760 660">
+<svg id="mapsvg" width="900" height="760" viewBox="0 0 900 760">
+<g id="mapg">
 __ROADS__
-<polyline class="route" points="__PATH__"/>
+<polyline class="route" points="__PATH__" vector-effect="non-scaling-stroke"/>
 __STOPS__
-<circle id="bus" class="bus" r="6" cx="0" cy="0"/>
-</svg></div>
+<circle id="bus" class="bus" r="3" cx="0" cy="0"/>
+</g>
+</svg>
+<div class="zoom"><button id="zin">+</button><button id="zout">−</button><button id="fit">FIT</button><span>wheel / drag</span></div></div>
 <div class="side">
 <div class="card"><div class="big" id="clock">--:--</div>
 <div>TIME <span id="state">RUNNING</span> · <span id="speed">0</span> km/h</div>
@@ -90,12 +96,24 @@ __STOPS__
 <text x="14" y="16">__VMAX__</text><text x="180" y="132">time</text>
 <polyline points="__SPEED__" fill="none" stroke="#ffe600" stroke-width="1.6"/>
 </svg></div>
-<div class="card"><b>STOPS / SCHEDULE</b><table><tr><th>#</th><th>stop</th><th>sched</th><th>sim</th><th>km</th></tr>__ROWS__</table></div>
+<div class="card"><b>STOPS / SCHEDULE</b><table><tr><th>#</th><th>stop</th><th>sched</th><th>est</th><th>sim</th><th>km</th></tr>__ROWS__</table></div>
 </div></div>
 <script>
 const D=__DATA__;
 const samples=D.samples;
 const bus=document.getElementById('bus');
+const svg=document.getElementById('mapsvg');
+const mapg=document.getElementById('mapg');
+let z=4.0, tx=450-450*z, ty=380-380*z, drag=null;
+function applyMap(){mapg.setAttribute('transform',`translate(${tx},${ty}) scale(${z})`);}
+applyMap();
+svg.addEventListener('wheel', e=>{e.preventDefault(); const r=svg.getBoundingClientRect(); const mx=e.clientX-r.left, my=e.clientY-r.top; const k=e.deltaY<0?1.15:0.87; const nz=Math.min(12,Math.max(1,z*k)); tx=mx-(mx-tx)*(nz/z); ty=my-(my-ty)*(nz/z); z=nz; applyMap();}, {passive:false});
+svg.addEventListener('pointerdown', e=>{drag={x:e.clientX,y:e.clientY,tx,ty}; svg.setPointerCapture(e.pointerId);});
+svg.addEventListener('pointermove', e=>{if(!drag)return; tx=drag.tx+(e.clientX-drag.x); ty=drag.ty+(e.clientY-drag.y); applyMap();});
+svg.addEventListener('pointerup', ()=>drag=null);
+document.getElementById('zin').onclick=()=>{z=Math.min(12,z*1.3); applyMap();};
+document.getElementById('zout').onclick=()=>{z=Math.max(1,z/1.3); applyMap();};
+document.getElementById('fit').onclick=()=>{z=1; tx=0; ty=0; applyMap();};
 const clock=document.getElementById('clock');
 const speedEl=document.getElementById('speed');
 const stateEl=document.getElementById('state');

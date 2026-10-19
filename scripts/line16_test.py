@@ -103,46 +103,96 @@ def load_stops():
     stops.sort(key=lambda x: x['stop_sequence'])
     return stops
 
+def estimate_times(stops, chain, raw):
+    """GTFS stop_times are minute-resolution; distribute seconds inside each minute window."""
+    groups = []
+    for i, t in enumerate(raw):
+        minute = int(t // 60) * 60
+        if groups and groups[-1][0] == minute:
+            groups[-1][1].append(i)
+        else:
+            groups.append((minute, [i]))
+    est = [0.0] * len(stops)
+    prev = -1e18
+    for minute, idxs in groups:
+        if len(idxs) == 1:
+            vals = [minute + 30.0]
+        else:
+            s0, s1 = chain[idxs[0]], chain[idxs[-1]]
+            span = max(s1 - s0, 0.001)
+            vals = [minute + 4.0 + (chain[i] - s0) / span * 52.0 for i in idxs]
+        for i, v in zip(idxs, vals):
+            v = max(v, prev + 2.0)
+            if v > minute + 59.0 and prev + 2.0 <= minute + 59.0:
+                v = minute + 59.0
+            est[i] = v
+            prev = v
+    return est
+
 def main():
     stops = load_stops()
     roads = json.loads(ROADS.read_text())['elements']
-    nodes, adj = build_graph(roads, MERGE_M)
-    print(f'graph: {len(nodes)} nodes, {sum(len(x) for x in adj)//2} edges')
-
-    def nearest(p):
-        return min(range(len(nodes)), key=lambda i: hav(nodes[i], p))
-    stop_idx = [nearest((s['gtfs_stop__lat'], s['gtfs_stop__lon'])) for s in stops]
-
-    path_ids = [stop_idx[0]]
-    for a, b in zip(stop_idx, stop_idx[1:]):
-        leg = dijkstra(nodes, adj, a, b)
-        if leg is None:
-            print('WARN unreachable leg, straight fallback')
-            leg = [a, b]
-        if path_ids and path_ids[-1] == leg[0]:
-            path_ids.extend(leg[1:])
-        else:
+    shape_file = ROOT / 'frontend/public/data/line16_shape.json'
+    if not shape_file.exists():
+        shape_file = Path('/tmp/line16_shape.json')
+    if shape_file.exists():
+        pts = json.loads(shape_file.read_text())
+        path = [(p[0], p[1]) for p in pts]
+        print(f'using GTFS shape: {len(path)} points')
+    else:
+        nodes, adj = build_graph(roads, MERGE_M)
+        print(f'graph: {len(nodes)} nodes, {sum(len(x) for x in adj)//2} edges')
+        def nearest(p):
+            return min(range(len(nodes)), key=lambda i: hav(nodes[i], p))
+        stop_idx = [nearest((s['gtfs_stop__lat'], s['gtfs_stop__lon'])) for s in stops]
+        path_ids = [stop_idx[0]]
+        for a, b in zip(stop_idx, stop_idx[1:]):
+            leg = dijkstra(nodes, adj, a, b)
+            if leg is None:
+                leg = [a, b]
             path_ids.extend(leg)
+        path = [nodes[i] for i in path_ids]
 
-    path = [nodes[i] for i in path_ids]
     chain = [0.0]
     for a, b in zip(path, path[1:]):
         chain.append(chain[-1] + hav(a, b))
     total_m = chain[-1]
 
-    # stop chainages: snap each stop to the nearest path vertex
+    # Project stops onto the route sequentially (monotonic chainage).
+    def project(p, start_j):
+        best_d, best_s, best_j = 1e30, chain[start_j], start_j
+        lat = p[0]
+        for j in range(start_j, len(path) - 1):
+            a, b = path[j], path[j+1]
+            ax = (a[1] - p[1]) * 111000.0 * math.cos(math.radians(lat))
+            ay = (a[0] - p[0]) * 111000.0
+            bx = (b[1] - p[1]) * 111000.0 * math.cos(math.radians(lat))
+            by = (b[0] - p[0]) * 111000.0
+            dx, dy = bx - ax, by - ay
+            den = dx * dx + dy * dy
+            t = 0.0 if den <= 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / den))
+            cx, cy = ax + t * dx, ay + t * dy
+            d = math.hypot(cx, cy)
+            if d < best_d:
+                best_d = d
+                best_s = chain[j] + t * (chain[j + 1] - chain[j])
+                best_j = j
+        return best_d, best_s, best_j
+
     stop_chain = []
+    j = 0
     for s in stops:
-        p = (s['gtfs_stop__lat'], s['gtfs_stop__lon'])
-        j = min(range(len(path)), key=lambda i: hav(path[i], p))
-        stop_chain.append(chain[j])
-    # enforce monotonic chainage
+        d, cs, j = project((s['gtfs_stop__lat'], s['gtfs_stop__lon']), j)
+        stop_chain.append(cs)
+        if d > 600:
+            print(f'WARN stop {s["stop_sequence"]} is {d:.0f} m from route')
     for i in range(1, len(stop_chain)):
         if stop_chain[i] < stop_chain[i-1]:
             stop_chain[i] = stop_chain[i-1]
 
-    t0 = dt.datetime.fromisoformat(stops[0]['arrival_time']).timestamp()
-    times = [dt.datetime.fromisoformat(s['arrival_time']).timestamp() for s in stops]
+    raw_times = [dt.datetime.fromisoformat(s['arrival_time']).timestamp() for s in stops]
+    times = estimate_times(stops, stop_chain, raw_times)
+    t0 = times[0]
 
     # normalized bell velocity shape and its inverse time map
     N = 400
@@ -198,7 +248,7 @@ def main():
     lats = [p[0] for p in path]; lons = [p[1] for p in path]
     lat0 = (min(lats) + max(lats)) / 2; lon0 = (min(lons) + max(lons)) / 2
     def xy(p):
-        return ((p[1] - lon0) * 111.0 * math.cos(math.radians(lat0)), -(p[0] - lat0) * 111.0)
+        return ((p[1] - lon0) * 111.0 * math.cos(math.radians(lat0)), (p[0] - lat0) * 111.0)
 
     data = {
         'ride_id': RIDE_ID, 'line': '16', 'agency': 'סופרבוס', 'city': 'יקנעם עילית',
@@ -210,6 +260,7 @@ def main():
             'seq': s['stop_sequence'], 'name': s['gtfs_stop__name'], 'code': s['gtfs_stop__code'],
             'lat': s['gtfs_stop__lat'], 'lon': s['gtfs_stop__lon'],
             'arrival': dt.datetime.fromisoformat(s['arrival_time']).astimezone(ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
+            'est_arrival': dt.datetime.fromtimestamp(times[i], ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
             'sim_arrival': dt.datetime.fromtimestamp(sim_times[i], ZoneInfo('Asia/Jerusalem')).strftime('%H:%M:%S'),
             'chain_km': round(stop_chain[i] / 1000, 3),
             'xy': xy((s['gtfs_stop__lat'], s['gtfs_stop__lon']))
