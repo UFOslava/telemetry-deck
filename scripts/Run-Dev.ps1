@@ -22,6 +22,14 @@ $Frontend = $null
 $ExitCode = 0
 
 function Write-Step([string]$Text) { Write-Host "[deck] $Text" -ForegroundColor Cyan }
+
+function Stop-ProcessTree([int]$ParentPid) {
+    Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentPid" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Stop-ProcessTree -ParentPid $_.ProcessId
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+}
 function Write-Fail([string]$Text) { Write-Host "[deck] $Text" -ForegroundColor Red }
 
 try {
@@ -95,8 +103,13 @@ catch {
 }
 finally {
     foreach ($proc in @($Frontend, $Backend)) {
-        if ($null -ne $proc -and -not $proc.HasExited) {
-            & taskkill /PID $proc.Id /T /F 2>$null | Out-Null
+        if ($null -ne $proc) {
+            # Kill descendants first: a uvicorn reloader worker keeps the port
+            # after its parent dies, and still points at the parent PID.
+            Stop-ProcessTree -ParentPid $proc.Id
+            if (-not $proc.HasExited) {
+                & taskkill /PID $proc.Id /T /F 2>$null | Out-Null
+            }
         }
     }
     Start-Sleep -Milliseconds 500
