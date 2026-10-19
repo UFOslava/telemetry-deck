@@ -65,7 +65,7 @@ try {
 
     Write-Step "Starting backend on http://127.0.0.1:$BackendPort"
     $Backend = Start-Process -FilePath $Python `
-        -ArgumentList @('-m','uvicorn','app.main:app','--host','127.0.0.1','--port',"$BackendPort",'--reload') `
+        -ArgumentList @('-m','uvicorn','app.main:app','--host','127.0.0.1','--port',"$BackendPort") `
         -WorkingDirectory (Join-Path $Root 'backend') -NoNewWindow -PassThru
 
     $Healthy = $false
