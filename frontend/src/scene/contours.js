@@ -39,14 +39,15 @@ export function buildContourMesh(elevationData, config = {}) {
   const colors = [];
 
   const baseColor = new THREE.Color(color);
-  const highColor = new THREE.Color(0x80ffff);
+  const highColor = new THREE.Color(0xffffff); // Pure white at highest topo line value
 
   multiPolygons.forEach((multiPoly) => {
     const isoval = multiPoly.value;
-    const normElevation = (isoval - min_elevation) / Math.max(1, max_elevation - min_elevation);
+    const normElevation = Math.max(0, Math.min(1, (isoval - min_elevation) / Math.max(1, max_elevation - min_elevation)));
     const elevY = (isoval / 1000.0) * elevationScale; // Metric elevation in km * scale
 
-    const levelColor = baseColor.clone().lerp(highColor, normElevation * 0.7);
+    // Blue for lower terrain topo lines fading to pure white at highest topo line value
+    const levelColor = baseColor.clone().lerp(highColor, normElevation);
 
     multiPoly.coordinates.forEach((polygon) => {
       polygon.forEach((ring) => {

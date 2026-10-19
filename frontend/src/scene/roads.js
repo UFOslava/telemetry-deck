@@ -32,12 +32,28 @@ export class RoadNetworkManager {
     if (options.roadColor !== undefined) this.config.roadColor = options.roadColor;
     if (options.roadOpacity !== undefined) this.config.roadOpacity = options.roadOpacity;
     
+    this.applyOpacity(this.isDimmed ? 0.6 : 1.0);
+  }
+
+  setDimmed(dimmed) {
+    this.isDimmed = !!dimmed;
+    this.applyOpacity(this.isDimmed ? 0.6 : 1.0); // 40% fade = 0.6 multiplier
+  }
+
+  applyOpacity(multiplier = 1.0) {
     this.roadGroup.traverse(child => {
       if (child.isLineSegments && child.userData.isRoad) {
         child.material.color.set(this.config.roadColor);
-        child.material.opacity = child.userData.isMajor 
+        child.material.opacity = (child.userData.isMajor 
           ? this.config.roadOpacity 
-          : this.config.roadOpacity * 0.55;
+          : this.config.roadOpacity * 0.55) * multiplier;
+        child.material.needsUpdate = true;
+      } else if (child.isLineSegments && child.userData.isRail) {
+        child.material.opacity = (this.config.railwayOpacity || 0.9) * multiplier;
+        child.material.needsUpdate = true;
+      } else if (child.isMesh && child.userData.isCongestion) {
+        const baseOp = child.userData.severity === 'severe' ? 0.95 : 0.85;
+        child.material.opacity = baseOp * multiplier;
         child.material.needsUpdate = true;
       }
     });

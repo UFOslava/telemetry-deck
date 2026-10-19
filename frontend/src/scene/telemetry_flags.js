@@ -33,14 +33,14 @@ export class SpatialFlagsManager {
       this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
-      const backings = [];
+      const hitboxes = [];
       this.flagsMap.forEach(rec => {
-        if (rec.backingMesh && rec.backingMesh.visible) {
-          backings.push(rec.backingMesh);
+        if (rec.hitboxMesh && rec.flagRoot.visible) {
+          hitboxes.push(rec.hitboxMesh);
         }
       });
 
-      const intersects = this.raycaster.intersectObjects(backings, false);
+      const intersects = this.raycaster.intersectObjects(hitboxes, false);
       if (intersects.length > 0) {
         const ent = intersects[0].object.userData.entity;
         if (ent && this.onSelect) {
@@ -91,8 +91,15 @@ export class SpatialFlagsManager {
       const planeGeo = new THREE.PlaneGeometry(fw, fh);
       const backingMesh = new THREE.Mesh(planeGeo, backingMat);
       backingMesh.position.set(0, 0, -0.005);
-      backingMesh.userData = { entity: ent };
       flagRoot.add(backingMesh);
+
+      // Enlarged Selection Hitbox (60% larger area) for effortless clicking/tapping
+      const hitGeo = new THREE.PlaneGeometry(fw * 1.6, fh * 1.8);
+      const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+      const hitboxMesh = new THREE.Mesh(hitGeo, hitMat);
+      hitboxMesh.position.set(0, 0, 0.05);
+      hitboxMesh.userData = { entity: ent };
+      flagRoot.add(hitboxMesh);
 
       // 2. 3D Vector Wireframe Border & Corner Brackets
       const borderPts = [
@@ -187,6 +194,7 @@ export class SpatialFlagsManager {
       this.flagsMap.set(ent.id, {
         flagRoot,
         backingMesh,
+        hitboxMesh,
         callsignMesh,
         speedMesh,
         lineMesh,

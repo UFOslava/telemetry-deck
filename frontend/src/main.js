@@ -118,8 +118,25 @@ const spatialFlagsManager = new SpatialFlagsManager(scene, camera, svgOverlay, {
   }
 });
 
-// Elevated Bus Route Inspection Plane
-const routeInspectionPlane = new RouteInspectionPlane(scene, camera);
+// Elevated Bus Route Inspection Plane (elevated 1.5x higher with 40% background dimming)
+const routeInspectionPlane = new RouteInspectionPlane(scene, camera, {
+  onSelect: () => {
+    // Fade terrain contours and roads below by 40% (multiplier = 0.6)
+    if (contoursMesh) {
+      contoursMesh.material.opacity = currentConfig.contourOpacity * 0.6;
+      contoursMesh.material.needsUpdate = true;
+    }
+    roadManager.setDimmed(true);
+  },
+  onClear: () => {
+    // Restore normal opacity
+    if (contoursMesh) {
+      contoursMesh.material.opacity = currentConfig.contourOpacity;
+      contoursMesh.material.needsUpdate = true;
+    }
+    roadManager.setDimmed(false);
+  }
+});
 
 // Contours Layer (4-quadrant stitched DEM)
 let contoursMesh = null;
@@ -151,7 +168,12 @@ function rebuildContours() {
     contoursMesh.geometry.dispose();
     contoursMesh.material.dispose();
   }
-  contoursMesh = buildContourMesh(elevationData, currentConfig);
+  const isInspecting = routeInspectionPlane && routeInspectionPlane.selectedBus;
+  const effectiveConfig = {
+    ...currentConfig,
+    contourOpacity: isInspecting ? currentConfig.contourOpacity * 0.6 : currentConfig.contourOpacity
+  };
+  contoursMesh = buildContourMesh(elevationData, effectiveConfig);
   scene.add(contoursMesh);
 }
 

@@ -2,14 +2,17 @@ import * as THREE from 'three';
 import { createHUDText } from './vector_font.js';
 
 export class RouteInspectionPlane {
-  constructor(scene, camera) {
+  constructor(scene, camera, options = {}) {
     this.scene = scene;
     this.camera = camera;
     this.planeGroup = new THREE.Group();
     this.scene.add(this.planeGroup);
 
-    this.planeHeight = 2.2; // Elevation plane height in km above ground
+    // 1.5 times higher: 2.2 * 1.5 = 3.3 km
+    this.planeHeight = 3.3;
     this.selectedBus = null;
+    this.onSelect = options.onSelect || null;
+    this.onClear = options.onClear || null;
 
     this.routeLine = null;
     this.tetherLines = null;
@@ -64,13 +67,16 @@ export class RouteInspectionPlane {
     this.planeGroup.visible = true;
     this.rebuildElevatedRoute(bus);
     this.renderInfoPanel(bus);
+    if (this.onSelect) this.onSelect(bus);
   }
 
   clear() {
+    const wasSelected = !!this.selectedBus;
     this.selectedBus = null;
     this.planeGroup.visible = false;
     const panel = document.getElementById('transit-route-panel');
     if (panel) panel.style.display = 'none';
+    if (wasSelected && this.onClear) this.onClear();
   }
 
   rebuildElevatedRoute(bus) {
