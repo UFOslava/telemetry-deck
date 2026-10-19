@@ -196,12 +196,18 @@ export class CelestialDomeManager {
     const satGeo = new THREE.SphereGeometry(0.22, 12, 12);
 
     this.satellites.forEach(sat => {
-      const mat = new THREE.MeshBasicMaterial({
-        color: sat.color,
-        transparent: true,
-        opacity: 0.85
-      });
-      const mesh = new THREE.Mesh(satGeo, mat);
+      let mesh;
+      if (sat.id === 'SAT-01') {
+        // 2) ISS: Remove the sphere, leave only the SVG in 3D space, facing the center of the map
+        mesh = this.create3DISSVectorModel(sat);
+      } else {
+        const mat = new THREE.MeshBasicMaterial({
+          color: sat.color,
+          transparent: true,
+          opacity: 0.85
+        });
+        mesh = new THREE.Mesh(satGeo, mat);
+      }
       mesh.userData = { isSatellite: true, satData: sat };
       this.group.add(mesh);
 
@@ -219,6 +225,118 @@ export class CelestialDomeManager {
 
       this.satelliteMeshes.push({ mesh, line, sat });
     });
+  }
+
+  create3DISSVectorModel(sat) {
+    const group = new THREE.Group();
+
+    // Central Truss (horizontal girder)
+    const trussPositions = [
+      -1.4, 0, 0,   1.4, 0, 0,
+      -1.4, 0.08, 0, 1.4, 0.08, 0,
+      -1.2, 0, 0, -1.0, 0.08, 0,
+      -0.8, 0, 0, -0.6, 0.08, 0,
+      0.6, 0, 0, 0.8, 0.08, 0,
+      1.0, 0, 0, 1.2, 0.08, 0
+    ];
+    const trussGeo = new THREE.BufferGeometry();
+    trussGeo.setAttribute('position', new THREE.Float32BufferAttribute(trussPositions, 3));
+    const trussMat = new THREE.LineBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending
+    });
+    group.add(new THREE.LineSegments(trussGeo, trussMat));
+
+    // Pressurized Module Core (Zarya, Unity, Destiny, Harmony, Columbus, Kibo)
+    const corePositions = [
+      -0.2, -0.45, 0,   -0.2, 0.45, 0,
+      0.2, -0.45, 0,    0.2, 0.45, 0,
+      -0.2, -0.45, 0,   0.2, -0.45, 0,
+      -0.2, 0.45, 0,    0.2, 0.45, 0,
+      0, -0.45, 0, 0, -0.65, 0,
+      -0.12, -0.65, 0, 0.12, -0.65, 0,
+      0, 0.45, 0, 0, 0.65, 0,
+      -0.12, 0.65, 0, 0.12, 0.65, 0
+    ];
+    const coreGeo = new THREE.BufferGeometry();
+    coreGeo.setAttribute('position', new THREE.Float32BufferAttribute(corePositions, 3));
+    const coreMat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending
+    });
+    group.add(new THREE.LineSegments(coreGeo, coreMat));
+
+    // Solar Array Wings (4 huge pairs in tactical golden solar yellow)
+    const solarPositions = [];
+    const solarPanels = [
+      { x0: -1.35, x1: -0.9, y0: 0.2, y1: 0.8 },
+      { x0: -1.35, x1: -0.9, y0: -0.8, y1: -0.2 },
+      { x0: 0.9, x1: 1.35, y0: 0.2, y1: 0.8 },
+      { x0: 0.9, x1: 1.35, y0: -0.8, y1: -0.2 }
+    ];
+
+    solarPanels.forEach(p => {
+      // Outer perimeter
+      solarPositions.push(
+        p.x0, p.y0, 0,  p.x1, p.y0, 0,
+        p.x1, p.y0, 0,  p.x1, p.y1, 0,
+        p.x1, p.y1, 0,  p.x0, p.y1, 0,
+        p.x0, p.y1, 0,  p.x0, p.y0, 0
+      );
+      // Photovoltaic cell divider
+      const midX = (p.x0 + p.x1) * 0.5;
+      solarPositions.push(midX, p.y0, 0, midX, p.y1, 0);
+      const stepY = (p.y1 - p.y0) / 3;
+      for (let k = 1; k < 3; k++) {
+        const y = p.y0 + k * stepY;
+        solarPositions.push(p.x0, y, 0, p.x1, y, 0);
+      }
+    });
+
+    const solarGeo = new THREE.BufferGeometry();
+    solarGeo.setAttribute('position', new THREE.Float32BufferAttribute(solarPositions, 3));
+    const solarMat = new THREE.LineBasicMaterial({
+      color: 0xffe600,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending
+    });
+    group.add(new THREE.LineSegments(solarGeo, solarMat));
+
+    // Tactical target reticle circle around ISS
+    const reticlePositions = [];
+    const reticleSegments = 24;
+    const R_ret = 1.55;
+    for (let i = 0; i < reticleSegments; i++) {
+      const a1 = (i / reticleSegments) * Math.PI * 2;
+      const a2 = ((i + 1) / reticleSegments) * Math.PI * 2;
+      reticlePositions.push(
+        Math.cos(a1) * R_ret, Math.sin(a1) * R_ret, 0,
+        Math.cos(a2) * R_ret, Math.sin(a2) * R_ret, 0
+      );
+    }
+    const retGeo = new THREE.BufferGeometry();
+    retGeo.setAttribute('position', new THREE.Float32BufferAttribute(reticlePositions, 3));
+    const retMat = new THREE.LineBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending
+    });
+    group.add(new THREE.LineSegments(retGeo, retMat));
+
+    // Invisible spherical hitbox for smooth raycasting / hover
+    const hitGeo = new THREE.SphereGeometry(1.5, 8, 8);
+    const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+    const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    hitMesh.userData = { isSatellite: true, satData: sat };
+    group.add(hitMesh);
+
+    return group;
   }
 
   updateCelestialPositions(date = new Date()) {
@@ -309,8 +427,11 @@ export class CelestialDomeManager {
         const sinAlt = Math.sin(alt);
         const slantRange = Math.sqrt(R_E * R_E * sinAlt * sinAlt + 2 * R_E * h + h * h) - R_E * sinAlt;
         const dimFactor = Math.min(1.0, Math.max(0.12, Math.pow(h / slantRange, 1.35)));
-
-        mesh.material.opacity = dimFactor;
+        if (sat.id === 'SAT-01') {
+          // 3D vector model of ISS
+        } else if (mesh.material) {
+          mesh.material.opacity = dimFactor;
+        }
         const scale = 0.6 + dimFactor * 0.7;
         mesh.scale.set(scale, scale, scale);
 
@@ -319,6 +440,10 @@ export class CelestialDomeManager {
         const y = this.domeRadius * Math.sin(alt);
         const z = -this.domeRadius * Math.cos(alt) * Math.cos(azm);
         mesh.position.set(x, y, z);
+
+        if (sat.id === 'SAT-01') {
+          mesh.lookAt(0, 0, 0);
+        }
 
         line.geometry.setFromPoints([new THREE.Vector3(), new THREE.Vector3(x, y, z)]);
         line.computeLineDistances();

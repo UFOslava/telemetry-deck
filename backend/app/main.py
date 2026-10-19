@@ -60,6 +60,7 @@ SETTINGS_DEFAULTS = {
     "idleTimeoutMs": 30000,
     "idleRotationSpeed": 0.0015,
     "initialCameraPitch": 58.0,
+    "aaMode": "fxaa",
 }
 
 

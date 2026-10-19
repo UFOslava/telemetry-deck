@@ -24,6 +24,29 @@ export class TelemetryPinsManager {
     });
 
     this.sphereGeo = new THREE.SphereGeometry(0.18, 12, 12);
+    this.hitGeo = new THREE.SphereGeometry(0.55, 8, 8);
+    this.hitMat = new THREE.MeshBasicMaterial({ visible: false });
+
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2(-999, -999);
+    this.initInteraction();
+  }
+
+  initInteraction() {
+    window.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'CANVAS') return;
+      this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const hitboxes = this.pinsGroup.children.filter(c => c.userData && c.userData.entity);
+      const intersects = this.raycaster.intersectObjects(hitboxes, false);
+      if (intersects.length > 0) {
+        const ent = intersects[0].object.userData.entity;
+        if (ent && this.onSelect) {
+          this.onSelect(ent);
+        }
+      }
+    });
   }
 
   setEntities(entities) {
@@ -34,7 +57,7 @@ export class TelemetryPinsManager {
   rebuild3DMeshes() {
     while (this.pinsGroup.children.length > 0) {
       const obj = this.pinsGroup.children.pop();
-      if (obj.geometry) obj.geometry.dispose();
+      if (obj.geometry && obj.geometry !== this.sphereGeo && obj.geometry !== this.hitGeo) obj.geometry.dispose();
     }
 
     const tethers = [];
@@ -47,6 +70,12 @@ export class TelemetryPinsManager {
       const sphere = new THREE.Mesh(this.sphereGeo, mat);
       sphere.position.set(ent.x, ent.y, ent.z);
       this.pinsGroup.add(sphere);
+
+      // Selection hitbox around the drop pin
+      const hitMesh = new THREE.Mesh(this.hitGeo, this.hitMat);
+      hitMesh.position.set(ent.x, ent.y, ent.z);
+      hitMesh.userData = { entity: ent };
+      this.pinsGroup.add(hitMesh);
 
       // Vertical Drop-Pin line to ground (ent.groundY or 0)
       const ground = ent.groundY || 0;

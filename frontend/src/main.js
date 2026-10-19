@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { setupCamera, CameraController } from './scene/camera.js';
-import { setupBloom } from './scene/bloom.js';
+import { setupBloom, updateComposerSize } from './scene/bloom.js';
 import { createPolarGrid, renderPerimeterCompassLabels } from './scene/polar_grid.js';
 import { buildContourMesh } from './scene/contours.js';
 import { RoadNetworkManager } from './scene/roads.js';
@@ -9,7 +9,6 @@ import { RouteInspectionPlane } from './scene/route_plane.js';
 import { CelestialDomeManager } from './scene/celestial_dome.js';
 import { TelemetryPinsManager } from './scene/telemetry_pins.js';
 import { EncompassingCylinderHUD } from './scene/encompassing_cylinder.js';
-import { SpatialFlagsManager } from './scene/telemetry_flags.js';
 import { TelemetryStream } from './network/data_stream.js';
 
 const container = document.getElementById('viewport-container');
@@ -30,7 +29,8 @@ const DEFAULT_CONFIG = {
   roadOpacity: 0.95,
   idleTimeoutMs: 30000,
   idleRotationSpeed: 0.0015,
-  initialCameraPitch: 58.0
+  initialCameraPitch: 58.0,
+  aaMode: 'fxaa'
 };
 
 // Kiosk / headless: load tactical parameters FROM DISK at boot (served by the backend
@@ -76,17 +76,24 @@ const cameraController = new CameraController(camera, renderer.domElement, {
   pitch: ((currentConfig.initialCameraPitch !== undefined ? currentConfig.initialCameraPitch : 58) * Math.PI) / 180
 });
 
-// Postprocessing Bloom (Essential for 3D holographic sheen)
-const composer = setupBloom(renderer, scene, camera, window.innerWidth, window.innerHeight);
+// Postprocessing Bloom & Anti-Aliasing (Feature: 2 modes - FXAA & MSAA 4x)
+const composer = setupBloom(
+  renderer,
+  scene,
+  camera,
+  window.innerWidth,
+  window.innerHeight,
+  currentConfig.aaMode || 'fxaa'
+);
 
 // Procedural Polar Grid with 3D North Compass Arrow
 let polarGrid = createPolarGrid(currentConfig.radiusKm, currentConfig.radiusKm / 4, 12);
 scene.add(polarGrid);
 
-// Encompassing 45° Curved Cylinder Bar (Visualizes 30s inactivity countdown with striped fill)
+// Encompassing 45° Curved Cylinder Bar (100% Vector Edition, 4x taller, x2 higher)
 const cylinderHUD = new EncompassingCylinderHUD(scene, currentConfig);
 
-// Virtual Celestial Dome (Sun, Moon, LEO Satellites)
+// Virtual Celestial Dome (Sun, Moon, LEO Satellites, 3D ISS Vector Model)
 const celestialManager = new CelestialDomeManager(scene, camera, renderer.domElement, currentConfig);
 celestialManager.updateCelestialPositions(new Date());
 
@@ -95,15 +102,6 @@ const roadManager = new RoadNetworkManager(scene, currentConfig);
 
 // Train Station Manager (Exact surveyed Kfar Yehoshua coordinates & 30m countdown flag)
 const stationManager = new TrainStationManager(scene, camera, svgOverlay, currentConfig);
-
-// 3D Spatial Vector Flags Manager (True 3D vector wireframes + translucent backing in WebGL, Option 1 zero-flicker vector text)
-const spatialFlagsManager = new SpatialFlagsManager(scene, camera, svgOverlay, {
-  onSelect: (entity) => {
-    if (entity.type === 'transit') {
-      routeInspectionPlane.selectBus(entity);
-    }
-  }
-});
 
 // Elevated Bus Route Inspection Plane (elevated 1.5x higher with 40% background dimming)
 const routeInspectionPlane = new RouteInspectionPlane(scene, camera, {
@@ -325,7 +323,6 @@ const telemetry = new TelemetryStream(
     if (data.type === 'telemetry' && Array.isArray(data.entities)) {
       activeTransitEntities = data.entities;
       pinsManager.setEntities(data.entities);
-      spatialFlagsManager.updateEntities(data.entities);
     }
   },
   (status) => {
@@ -346,7 +343,7 @@ function onResize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  composer.setSize(w, h);
+  updateComposerSize(composer, renderer, w, h);
 }
 window.addEventListener('resize', onResize);
 
@@ -405,8 +402,6 @@ function animate() {
   // Smooth physical transit simulation along road vectors
   pinsManager.updateSimulation(delta, roadManager, sampleElevation);
 
-  // Update 3D vector wireframe flags & vector stroke HUD text in WebGL world space (Option 1)
-  spatialFlagsManager.update3DPositions(cameraController.yaw);
   stationManager.update3DPositions(cameraController.yaw);
 
   celestialManager.checkHover();
@@ -414,50 +409,8 @@ function animate() {
   // Render 3D WebGL scene through UnrealBloomPass
   composer.render();
 
-  // 7) Make an ISS SVG icon follow ISS direction when it's above the horizon
-  const issData = celestialManager.getISSScreenPosition(window.innerWidth, window.innerHeight);
-  let svgContent = '';
-  if (issData) {
-    const sx = Math.round(issData.x);
-    const sy = Math.round(issData.y);
-    if (sx >= 10 && sx <= window.innerWidth - 10 && sy >= 10 && sy <= window.innerHeight - 10) {
-      svgContent += `
-        <g class="iss-target-tag" style="cursor: pointer; pointer-events: auto;">
-          <!-- Target reticle -->
-          <circle cx="${sx}" cy="${sy}" r="18" fill="rgba(0, 229, 255, 0.08)" stroke="#00e5ff" stroke-width="1.2" stroke-dasharray="3,2" />
-          <circle cx="${sx}" cy="${sy}" r="4" fill="none" stroke="#ffe600" stroke-width="1.2" />
-          <circle cx="${sx}" cy="${sy}" r="1.5" fill="#ffe600" />
-          
-          <!-- Detailed ISS Vector SVG Icon -->
-          <!-- Central Truss Structure -->
-          <line x1="${sx - 14}" y1="${sy}" x2="${sx + 14}" y2="${sy}" stroke="#e0f7fa" stroke-width="1.8" />
-          
-          <!-- Pressurized Core Module -->
-          <rect x="${sx - 3}" y="${sy - 6}" width="6" height="12" fill="#020916" stroke="#00e5ff" stroke-width="1" rx="1" />
-          <line x1="${sx}" y1="${sy - 8}" x2="${sx}" y2="${sy + 8}" stroke="#00e5ff" stroke-width="1" />
-
-          <!-- Left Solar Arrays (Port) -->
-          <rect x="${sx - 16}" y="${sy - 12}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
-          <line x1="${sx - 13.5}" y1="${sy - 12}" x2="${sx - 13.5}" y2="${sy - 2}" stroke="#ffe600" stroke-width="0.5" />
-          <rect x="${sx - 16}" y="${sy + 2}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
-          <line x1="${sx - 13.5}" y1="${sy + 2}" x2="${sx - 13.5}" y2="${sy + 12}" stroke="#ffe600" stroke-width="0.5" />
-
-          <!-- Right Solar Arrays (Starboard) -->
-          <rect x="${sx + 11}" y="${sy - 12}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
-          <line x1="${sx + 13.5}" y1="${sy - 12}" x2="${sx + 13.5}" y2="${sy - 2}" stroke="#ffe600" stroke-width="0.5" />
-          <rect x="${sx + 11}" y="${sy + 2}" width="5" height="10" fill="#020916" stroke="#ffe600" stroke-width="0.8" />
-          <line x1="${sx + 13.5}" y1="${sy + 2}" x2="${sx + 13.5}" y2="${sy + 12}" stroke="#ffe600" stroke-width="0.5" />
-
-          <!-- Tactical HUD Tag Readout -->
-          <line x1="${sx + 16}" y1="${sy - 12}" x2="${sx + 36}" y2="${sy - 26}" stroke="#00e5ff" stroke-width="1" opacity="0.8" />
-          <rect x="${sx + 36}" y="${sy - 38}" width="124" height="25" fill="rgba(1, 15, 30, 0.9)" stroke="#00e5ff" stroke-width="1" rx="2" />
-          <text x="${sx + 42}" y="${sy - 27}" fill="#ffe600" font-size="9" font-family="'Courier New', monospace" font-weight="bold">ISS (ZARYA) [LEO]</text>
-          <text x="${sx + 42}" y="${sy - 17}" fill="#00e5ff" font-size="8" font-family="'Courier New', monospace">ALT 418KM | ${issData.altDeg}° EL</text>
-        </g>
-      `;
-    }
-  }
-  svgOverlay.innerHTML = svgContent;
+  // Clear 2D SVG overlay (all text and ISS are now purely 3D WebGL vectors)
+  svgOverlay.innerHTML = '';
 
   const camReadout = document.getElementById('camera-mode-readout');
   if (camReadout) {

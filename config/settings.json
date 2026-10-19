@@ -7,5 +7,7 @@
   "roadColor": 16770560,
   "roadOpacity": 0.95,
   "idleTimeoutMs": 30000,
-  "idleRotationSpeed": 0.0015
+  "idleRotationSpeed": 0.0015,
+  "initialCameraPitch": 45,
+  "aaMode": "fxaa"
 }
