@@ -1,0 +1,18 @@
+[Unit]
+Description=Telemetry Deck kiosk (full-screen on the second monitor)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ufoslava
+Group=ufoslava
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=HOME=/home/ufoslava
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do curl -sf http://localhost:5173/ >/dev/null 2>&1 && exit 0; sleep 2; done; exit 0'
+ExecStart=/home/ufoslava/projects/telemetry-deck/scripts/kiosk.sh http://localhost:5173/ last
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

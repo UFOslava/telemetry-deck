@@ -15,8 +15,12 @@ import { TelemetryStream } from './network/data_stream.js';
 const container = document.getElementById('viewport-container');
 const svgOverlay = document.getElementById('hud-overlay');
 
-// Viewport configuration
-let currentConfig = {
+// Same-origin API: nginx (prod) and the vite dev server both proxy /api and /ws
+// to the backend, so requests are relative and work on any host/port (kiosk + LAN).
+const API_BASE = '';
+
+// Default tactical parameters (fallback when no on-disk settings exist)
+const DEFAULT_CONFIG = {
   centerLat: 32.6595,
   centerLon: 35.1090,
   radiusKm: 10.0,
@@ -27,6 +31,44 @@ let currentConfig = {
   idleTimeoutMs: 30000,
   idleRotationSpeed: 0.0015
 };
+
+// Kiosk / headless: load tactical parameters FROM DISK at boot (served by the backend
+// from config/settings.json) so the deck runs with no mouse/keyboard.
+async function loadConfigFromDisk() {
+  try {
+    const res = await fetch(`${API_BASE}/api/settings`, { cache: 'no-store' });
+    if (res.ok) {
+      const cfg = await res.json();
+      console.log('[settings] loaded from disk:', cfg);
+      return { ...DEFAULT_CONFIG, ...cfg };
+    }
+  } catch (e) {
+    console.warn('[settings] disk load failed; using defaults:', e);
+  }
+  return { ...DEFAULT_CONFIG };
+}
+
+// Top-level await: resolve settings BEFORE any scene managers are constructed.
+let currentConfig = await loadConfigFromDisk();
+
+// Reflect loaded settings in the HUD + settings modal
+document.getElementById('radar-subtext').textContent =
+  `ANCHOR: (${currentConfig.centerLat.toFixed(4)}° N, ${currentConfig.centerLon.toFixed(4)}° E) | R: ${currentConfig.radiusKm.toFixed(1)} KM`;
+
+(function syncSettingsModal() {
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  setVal('cfg-lat', currentConfig.centerLat);
+  setVal('cfg-lon', currentConfig.centerLon);
+  setVal('cfg-radius', currentConfig.radiusKm);
+  setVal('cfg-step', String(currentConfig.stepMeters));
+  setVal('cfg-contour-op', Math.round(currentConfig.contourOpacity * 100));
+  setVal('cfg-road-color', '0x' + currentConfig.roadColor.toString(16).padStart(6, '0'));
+  setVal('cfg-road-op', Math.round(currentConfig.roadOpacity * 100));
+  setVal('cfg-idle-timeout', Math.round(currentConfig.idleTimeoutMs / 1000));
+  setVal('cfg-idle-speed', String(currentConfig.idleRotationSpeed));
+  const co = document.getElementById('val-contour-op'); if (co) co.textContent = `${Math.round(currentConfig.contourOpacity * 100)}%`;
+  const ro = document.getElementById('val-road-op'); if (ro) ro.textContent = `${Math.round(currentConfig.roadOpacity * 100)}%`;
+})();
 
 // Renderer setup
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -154,7 +196,7 @@ async function loadLayers() {
 
 async function fetchTrafficFlow() {
   try {
-    const res = await fetch('http://localhost:8000/api/traffic/flow');
+    const res = await fetch(`${API_BASE}/api/traffic/flow`);
     if (res.ok) {
       const data = await res.json();
       console.log("[Traffic Flow] Loaded traffic data from backend:", data);
@@ -242,7 +284,7 @@ setInterval(fetchTrafficFlow, 300000);
 
 // WebSocket telemetry listener
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsUrl = `${wsProtocol}//${window.location.hostname}:8000/ws/telemetry`;
+const wsUrl = `${wsProtocol}//${location.host}/ws/telemetry`;
 
 const telemetry = new TelemetryStream(
   wsUrl,
@@ -335,6 +377,13 @@ document.getElementById('save-settings-btn').addEventListener('click', () => {
 
   document.getElementById('radar-subtext').textContent = 
     `ANCHOR: (${currentConfig.centerLat.toFixed(4)}° N, ${currentConfig.centerLon.toFixed(4)}° E) | R: ${currentConfig.radiusKm.toFixed(1)} KM`;
+
+  // Persist to disk so the headless/kiosk boot picks these up
+  fetch(`${API_BASE}/api/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(currentConfig)
+  }).catch((e) => console.warn('[settings] save failed:', e));
 
   modal.classList.remove('active');
 });

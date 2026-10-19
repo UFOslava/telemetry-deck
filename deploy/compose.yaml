@@ -1,0 +1,37 @@
+name: telemetry-deck
+
+services:
+  backend:
+    image: ghcr.io/ufoslava/telemetry-deck-backend:latest
+    environment:
+      - CENTER_LAT=${CENTER_LAT:-32.0853}
+      - CENTER_LON=${CENTER_LON:-34.7818}
+      - RADIUS_KM=${RADIUS_KM:-25.0}
+      - SETTINGS_FILE=/config/settings.json
+      - TomTom_API_Key=${TomTom_API_Key:-}
+    volumes:
+      - ./config:/config
+    ports:
+      - "127.0.0.1:18000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    image: ghcr.io/ufoslava/telemetry-deck-frontend:latest
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -49,6 +49,42 @@ async def health_check():
         "tomtom_configured": bool(settings.get_tomtom_key())
     }
 
+SETTINGS_DEFAULTS = {
+    "centerLat": 32.6595,
+    "centerLon": 35.1090,
+    "radiusKm": 10.0,
+    "stepMeters": 25.0,
+    "contourOpacity": 0.42,
+    "roadColor": 16770560,
+    "roadOpacity": 0.95,
+    "idleTimeoutMs": 30000,
+    "idleRotationSpeed": 0.0015,
+}
+
+
+@app.get("/api/settings")
+async def get_settings():
+    """Tactical parameters loaded from disk (config/settings.json)."""
+    path = os.path.abspath(settings.SETTINGS_FILE)
+    data = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    return {**SETTINGS_DEFAULTS, **data}
+
+
+@app.put("/api/settings")
+async def put_settings(payload: dict):
+    path = os.path.abspath(settings.SETTINGS_FILE)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({**SETTINGS_DEFAULTS, **payload}, f, indent=2)
+    return {"saved": True, "path": path}
+
+
 @app.get("/api/elevation")
 async def get_elevation_grid():
     if os.path.exists(DATA_PATH):

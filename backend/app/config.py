@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     TOMTOM_API_KEY: str = ""
     TomTom_API_Key: str = ""
 
+    # On-disk tactical settings JSON (kiosk loads this at boot; no mouse needed).
+    # Local default: <repo>/config/settings.json ; in-container: /config/settings.json
+    SETTINGS_FILE: str = os.path.join(
+        os.path.dirname(__file__), "..", "..", "config", "settings.json"
+    )
+
     def get_tomtom_key(self) -> str:
         return self.TomTom_API_Key or self.TOMTOM_API_KEY or os.getenv("TomTom_API_Key", "") or os.getenv("TOMTOM_API_KEY", "")
 
