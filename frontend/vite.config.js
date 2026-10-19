@@ -13,6 +13,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': backendProxy,
+      '/settings': backendProxy,
       '/ws': { target: wsProxy, ws: true }
     }
   }

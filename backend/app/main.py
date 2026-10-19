@@ -62,6 +62,18 @@ SETTINGS_DEFAULTS = {
 }
 
 
+from fastapi.responses import HTMLResponse
+
+SETTINGS_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "settings.html")
+
+@app.get("/settings", response_class=HTMLResponse)
+async def get_settings_page():
+    if os.path.exists(SETTINGS_TEMPLATE_PATH):
+        with open(SETTINGS_TEMPLATE_PATH, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h2>Settings page template not found.</h2>", status_code=404)
+
+
 @app.get("/api/settings")
 async def get_settings():
     """Tactical parameters loaded from disk (config/settings.json)."""
@@ -80,9 +92,24 @@ async def get_settings():
 async def put_settings(payload: dict):
     path = os.path.abspath(settings.SETTINGS_FILE)
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    merged = {**SETTINGS_DEFAULTS, **payload}
     with open(path, "w") as f:
-        json.dump({**SETTINGS_DEFAULTS, **payload}, f, indent=2)
-    return {"saved": True, "path": path}
+        json.dump(merged, f, indent=2)
+
+    # Broadcast settings_updated to all active WebSocket clients
+    dead_connections = set()
+    for ws in list(active_connections):
+        try:
+            await ws.send_json({
+                "type": "settings_updated",
+                "settings": merged
+            })
+        except Exception:
+            dead_connections.add(ws)
+    for ws in dead_connections:
+        active_connections.discard(ws)
+
+    return {"saved": True, "path": path, "clients_notified": len(active_connections)}
 
 
 @app.get("/api/elevation")

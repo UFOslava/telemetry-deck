@@ -87,6 +87,7 @@ try {
 
     Write-Host ""
     Write-Host "  Deck ready:  http://localhost:$FrontendPort" -ForegroundColor Green
+    Write-Host "  Settings:    http://localhost:$FrontendPort/settings" -ForegroundColor Green
     Write-Host "  API health:  http://localhost:$FrontendPort/api/health" -ForegroundColor Green
     Write-Host "  Ctrl+C stops both." -ForegroundColor DarkGray
     Write-Host ""

@@ -55,20 +55,6 @@ let currentConfig = await loadConfigFromDisk();
 document.getElementById('radar-subtext').textContent =
   `ANCHOR: (${currentConfig.centerLat.toFixed(4)}° N, ${currentConfig.centerLon.toFixed(4)}° E) | R: ${currentConfig.radiusKm.toFixed(1)} KM`;
 
-(function syncSettingsModal() {
-  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  setVal('cfg-lat', currentConfig.centerLat);
-  setVal('cfg-lon', currentConfig.centerLon);
-  setVal('cfg-radius', currentConfig.radiusKm);
-  setVal('cfg-step', String(currentConfig.stepMeters));
-  setVal('cfg-contour-op', Math.round(currentConfig.contourOpacity * 100));
-  setVal('cfg-road-color', '0x' + currentConfig.roadColor.toString(16).padStart(6, '0'));
-  setVal('cfg-road-op', Math.round(currentConfig.roadOpacity * 100));
-  setVal('cfg-idle-timeout', Math.round(currentConfig.idleTimeoutMs / 1000));
-  setVal('cfg-idle-speed', String(currentConfig.idleRotationSpeed));
-  const co = document.getElementById('val-contour-op'); if (co) co.textContent = `${Math.round(currentConfig.contourOpacity * 100)}%`;
-  const ro = document.getElementById('val-road-op'); if (ro) ro.textContent = `${Math.round(currentConfig.roadOpacity * 100)}%`;
-})();
 
 // Renderer setup
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -311,6 +297,11 @@ const wsUrl = `${wsProtocol}//${location.host}/ws/telemetry`;
 const telemetry = new TelemetryStream(
   wsUrl,
   (data) => {
+    if (data.type === 'settings_updated') {
+      console.log('[telemetry] settings updated broadcast received; reloading deck...');
+      window.location.reload();
+      return;
+    }
     if (data.type === 'telemetry' && Array.isArray(data.entities)) {
       activeTransitEntities = data.entities;
       pinsManager.setEntities(data.entities);
@@ -339,75 +330,9 @@ function onResize() {
 }
 window.addEventListener('resize', onResize);
 
-// Settings Modal & Live Sliders
-const modal = document.getElementById('settings-modal');
-const contourOpSlider = document.getElementById('cfg-contour-op');
-const contourOpVal = document.getElementById('val-contour-op');
-const roadOpSlider = document.getElementById('cfg-road-op');
-const roadOpVal = document.getElementById('val-road-op');
-const roadColorSelect = document.getElementById('cfg-road-color');
-
-contourOpSlider.addEventListener('input', (e) => {
-  contourOpVal.textContent = `${e.target.value}%`;
-});
-
-roadOpSlider.addEventListener('input', (e) => {
-  roadOpVal.textContent = `${e.target.value}%`;
-  roadManager.updateStyle({ roadOpacity: parseInt(e.target.value, 10) / 100 });
-});
-
-roadColorSelect.addEventListener('change', (e) => {
-  roadManager.updateStyle({ roadColor: parseInt(e.target.value, 16) });
-});
-
-document.getElementById('open-settings-btn').addEventListener('click', () => {
-  modal.classList.add('active');
-});
-document.getElementById('close-settings-btn').addEventListener('click', () => {
-  modal.classList.remove('active');
-});
-document.getElementById('save-settings-btn').addEventListener('click', () => {
-  currentConfig.centerLat = parseFloat(document.getElementById('cfg-lat').value);
-  currentConfig.centerLon = parseFloat(document.getElementById('cfg-lon').value);
-  currentConfig.radiusKm = parseFloat(document.getElementById('cfg-radius').value);
-  currentConfig.stepMeters = parseFloat(document.getElementById('cfg-step').value);
-  currentConfig.contourOpacity = parseInt(contourOpSlider.value, 10) / 100.0;
-  currentConfig.roadColor = parseInt(roadColorSelect.value, 16);
-  currentConfig.roadOpacity = parseInt(roadOpSlider.value, 10) / 100.0;
-  currentConfig.idleTimeoutMs = parseInt(document.getElementById('cfg-idle-timeout').value, 10) * 1000;
-  currentConfig.idleRotationSpeed = parseFloat(document.getElementById('cfg-idle-speed').value);
-
-  cameraController.idleTimeoutMs = currentConfig.idleTimeoutMs;
-  cameraController.idleRotationSpeed = currentConfig.idleRotationSpeed;
-
-  cameraController.distance = currentConfig.radiusKm * 1.95;
-  cylinderHUD.setRadius(currentConfig.radiusKm);
-  celestialManager.setRadius(currentConfig.radiusKm);
-
-  scene.remove(polarGrid);
-  polarGrid = createPolarGrid(currentConfig.radiusKm, currentConfig.radiusKm / 4, 12);
-  scene.add(polarGrid);
-
-  roadManager.config.radiusKm = currentConfig.radiusKm;
-  if (tomtomRoadsData) roadManager.buildRoads(tomtomRoadsData, sampleElevation);
-  if (osmRailData) roadManager.buildRailways(osmRailData, sampleElevation);
-  stationManager.config.radiusKm = currentConfig.radiusKm;
-  stationManager.buildStations(sampleElevation);
-
-  rebuildContours();
-  initTransitVehicles();
-
-  document.getElementById('radar-subtext').textContent = 
-    `ANCHOR: (${currentConfig.centerLat.toFixed(4)}° N, ${currentConfig.centerLon.toFixed(4)}° E) | R: ${currentConfig.radiusKm.toFixed(1)} KM`;
-
-  // Persist to disk so the headless/kiosk boot picks these up
-  fetch(`${API_BASE}/api/settings`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(currentConfig)
-  }).catch((e) => console.warn('[settings] save failed:', e));
-
-  modal.classList.remove('active');
+// Settings redirect button
+document.getElementById('open-settings-btn')?.addEventListener('click', () => {
+  window.location.href = '/settings';
 });
 
 // Deselect route on ESC key

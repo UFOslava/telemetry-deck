@@ -101,71 +101,7 @@
       line-height: 1.5;
     }
 
-    /* Settings Modal */
-    #settings-modal {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 360px;
-      background: #020916;
-      border: 1px solid #00e5ff;
-      box-shadow: 0 0 25px rgba(0, 229, 255, 0.35);
-      padding: 20px;
-      z-index: 100;
-      color: #e0f7fa;
-      border-radius: 4px;
-    }
-    #settings-modal.active {
-      display: block;
-    }
-    .modal-title {
-      font-size: 14px;
-      font-weight: bold;
-      color: #00e5ff;
-      margin-bottom: 14px;
-      letter-spacing: 1.5px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .modal-close {
-      cursor: pointer;
-      color: #ff6a00;
-      font-size: 16px;
-    }
-    .form-group {
-      margin-bottom: 12px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 10px;
-      color: #70d8ff;
-      margin-bottom: 4px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .form-group input, .form-group select {
-      width: 100%;
-      background: rgba(14, 56, 102, 0.35);
-      border: 1px solid rgba(0, 229, 255, 0.5);
-      color: #00e5ff;
-      padding: 6px 8px;
-      font-family: inherit;
-      font-size: 12px;
-      outline: none;
-    }
-    .form-group input:focus {
-      border-color: #00e5ff;
-      box-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
-    }
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 18px;
-    }
+
 
     /* Celestial Hover Tooltip */
     #celestial-tooltip {
@@ -221,66 +157,7 @@
     <div id="camera-mode-readout">CAMERA: IDLE ROTATION (DRAG TO ROTATE)</div>
   </div>
 
-  <!-- Settings Modal -->
-  <div id="settings-modal">
-    <div class="modal-title">
-      <span>TACTICAL PARAMETERS</span>
-      <span class="modal-close" id="close-settings-btn">&times;</span>
-    </div>
-    <div class="form-group">
-      <label>Center Latitude (°N)</label>
-      <input type="number" step="0.0001" id="cfg-lat" value="32.6595" />
-    </div>
-    <div class="form-group">
-      <label>Center Longitude (°E)</label>
-      <input type="number" step="0.0001" id="cfg-lon" value="35.1090" />
-    </div>
-    <div class="form-group">
-      <label>Radar Radius (km)</label>
-      <input type="number" step="1.0" id="cfg-radius" value="10.0" />
-    </div>
-    <div class="form-group">
-      <label>Contour Interval (meters)</label>
-      <select id="cfg-step">
-        <option value="25" selected>25m (High Detail - Carmel Ridge)</option>
-        <option value="50">50m (Medium Detail)</option>
-        <option value="100">100m (Coarse Isolines)</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Contour Dimming / Opacity (<span id="val-contour-op">42%</span>)</label>
-      <input type="range" id="cfg-contour-op" min="10" max="100" value="42" />
-    </div>
-    <div class="form-group">
-      <label>Street & Road Color</label>
-      <select id="cfg-road-color">
-        <option value="0xffe600" selected>Electric Yellow (#ffe600)</option>
-        <option value="0x00e5ff">Neon Cyan (#00e5ff)</option>
-        <option value="0xff8f00">Tactical Amber (#ff8f00)</option>
-        <option value="0xffffff">Ice White (#ffffff)</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Street Brightness / Opacity (<span id="val-road-op">95%</span>)</label>
-      <input type="range" id="cfg-road-op" min="20" max="100" value="95" />
-    </div>
-    <div class="form-group">
-      <label>Return to Idle Timeout (seconds)</label>
-      <input type="number" step="5" id="cfg-idle-timeout" value="30" />
-    </div>
-    <div class="form-group">
-      <label>Idle Rotation Speed</label>
-      <select id="cfg-idle-speed">
-        <option value="0.001">Subtle (0.001 rad/frame)</option>
-        <option value="0.0015" selected>Standard (0.0015 rad/frame)</option>
-        <option value="0.003">Dynamic (0.003 rad/frame)</option>
-        <option value="0">Locked (No Rotation)</option>
-      </select>
-    </div>
-    <div class="modal-actions">
-      <button class="hud-btn" id="save-settings-btn">APPLY & REPROJECT</button>
-    </div>
-  </div>
+
 
   <div id="viewport-container"></div>
   <svg id="hud-overlay"></svg>

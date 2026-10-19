@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tactical Telemetry Deck - Settings</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      min-height: 100vh;
+      background-color: #01050d;
+      font-family: 'Courier New', Courier, monospace;
+      color: #00e5ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    .panel {
+      width: 100%;
+      max-width: 540px;
+      background: #020916;
+      border: 1px solid #00e5ff;
+      box-shadow: 0 0 35px rgba(0, 229, 255, 0.3);
+      padding: 28px;
+      border-radius: 4px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.3);
+    }
+    .panel-title {
+      font-size: 16px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: #00e5ff;
+      text-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+    }
+    .back-btn {
+      color: #ff6a00;
+      text-decoration: none;
+      font-size: 12px;
+      border: 1px solid rgba(255, 106, 0, 0.5);
+      padding: 4px 10px;
+      border-radius: 2px;
+      transition: all 0.2s;
+    }
+    .back-btn:hover {
+      background: rgba(255, 106, 0, 0.2);
+      border-color: #ff6a00;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #70d8ff;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      background: rgba(14, 56, 102, 0.35);
+      border: 1px solid rgba(0, 229, 255, 0.5);
+      color: #00e5ff;
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      border-radius: 2px;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: #00e5ff;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 24px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(0, 229, 255, 0.3);
+    }
+    .btn {
+      background: rgba(0, 229, 255, 0.15);
+      border: 1px solid #00e5ff;
+      color: #00e5ff;
+      padding: 10px 18px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 2px;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: rgba(0, 229, 255, 0.35);
+      box-shadow: 0 0 15px rgba(0, 229, 255, 0.6);
+    }
+    .status-msg {
+      font-size: 11px;
+      color: #00e5ff;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">TACTICAL PARAMETERS [SYS]</div>
+      <a href="javascript:history.back()" class="back-btn">&larr; BACK TO DECK</a>
+    </div>
+
+    <form id="settings-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Center Latitude (°N)</label>
+          <input type="number" step="0.0001" id="cfg-lat" required />
+        </div>
+        <div class="form-group">
+          <label>Center Longitude (°E)</label>
+          <input type="number" step="0.0001" id="cfg-lon" required />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Radar Radius (km)</label>
+          <input type="number" step="0.5" id="cfg-radius" required />
+        </div>
+        <div class="form-group">
+          <label>Contour Interval (meters)</label>
+          <select id="cfg-step">
+            <option value="25">25m (High Detail - Carmel Ridge)</option>
+            <option value="50">50m (Medium Detail)</option>
+            <option value="100">100m (Coarse Isolines)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Contour Opacity <span id="val-contour-op">42%</span></label>
+        <input type="range" id="cfg-contour-op" min="10" max="100" />
+      </div>
+
+      <div class="form-group">
+        <label>Street & Road Color</label>
+        <select id="cfg-road-color">
+          <option value="16770560">Electric Yellow (#ffe600)</option>
+          <option value="58879">Neon Cyan (#00e5ff)</option>
+          <option value="16748288">Tactical Amber (#ff8f00)</option>
+          <option value="16777215">Ice White (#ffffff)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Street Opacity <span id="val-road-op">95%</span></label>
+        <input type="range" id="cfg-road-op" min="20" max="100" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Idle Timeout (sec)</label>
+          <input type="number" step="5" min="5" id="cfg-idle-timeout" required />
+        </div>
+        <div class="form-group">
+          <label>Idle Rotation Speed</label>
+          <select id="cfg-idle-speed">
+            <option value="0.001">Subtle (0.001 rad/f)</option>
+            <option value="0.0015">Standard (0.0015 rad/f)</option>
+            <option value="0.003">Dynamic (0.003 rad/f)</option>
+            <option value="0">Locked (No Rotation)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <div class="status-msg" id="status-msg"></div>
+        <button type="submit" class="btn" id="save-btn">SAVE & BROADCAST</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const contourSlider = document.getElementById('cfg-contour-op');
+    const contourVal = document.getElementById('val-contour-op');
+    contourSlider.addEventListener('input', () => { contourVal.textContent = `${contourSlider.value}%`; });
+
+    const roadSlider = document.getElementById('cfg-road-op');
+    const roadVal = document.getElementById('val-road-op');
+    roadSlider.addEventListener('input', () => { roadVal.textContent = `${roadSlider.value}%`; });
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        document.getElementById('cfg-lat').value = data.centerLat;
+        document.getElementById('cfg-lon').value = data.centerLon;
+        document.getElementById('cfg-radius').value = data.radiusKm;
+        document.getElementById('cfg-step').value = String(data.stepMeters);
+        document.getElementById('cfg-road-color').value = String(data.roadColor);
+        document.getElementById('cfg-contour-op').value = Math.round(data.contourOpacity * 100);
+        contourVal.textContent = `${Math.round(data.contourOpacity * 100)}%`;
+        document.getElementById('cfg-road-op').value = Math.round(data.roadOpacity * 100);
+        roadVal.textContent = `${Math.round(data.roadOpacity * 100)}%`;
+        document.getElementById('cfg-idle-timeout').value = Math.round(data.idleTimeoutMs / 1000);
+        document.getElementById('cfg-idle-speed').value = String(data.idleRotationSpeed);
+      } catch (err) {
+        document.getElementById('status-msg').textContent = 'Failed to load settings: ' + err.message;
+      }
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const statusEl = document.getElementById('status-msg');
+      statusEl.textContent = 'Saving...';
+      const payload = {
+        centerLat: parseFloat(document.getElementById('cfg-lat').value),
+        centerLon: parseFloat(document.getElementById('cfg-lon').value),
+        radiusKm: parseFloat(document.getElementById('cfg-radius').value),
+        stepMeters: parseFloat(document.getElementById('cfg-step').value),
+        contourOpacity: parseInt(contourSlider.value, 10) / 100,
+        roadColor: parseInt(document.getElementById('cfg-road-color').value, 10),
+        roadOpacity: parseInt(roadSlider.value, 10) / 100,
+        idleTimeoutMs: parseInt(document.getElementById('cfg-idle-timeout').value, 10) * 1000,
+        idleRotationSpeed: parseFloat(document.getElementById('cfg-idle-speed').value),
+      };
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        statusEl.textContent = 'Settings saved & broadcast to deck!';
+        setTimeout(() => { statusEl.textContent = ''; }, 3500);
+      } catch (err) {
+        statusEl.textContent = 'Save error: ' + err.message;
+      }
+    });
+
+    loadSettings();
+  </script>
+</body>
+</html>
