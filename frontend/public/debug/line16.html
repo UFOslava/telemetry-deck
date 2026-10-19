@@ -2,9 +2,13 @@
 <html><head><meta charset="utf-8"><title>Line 16 test - Yokneam</title>
 <style>
 body{margin:0;background:#01050d;color:#bdefff;font-family:"Courier New",monospace}
-.wrap{display:flex;height:100vh}
-.map{width:900px;flex:0 0 900px;border-right:1px solid #0e3866;position:relative}
-.side{flex:1;padding:12px;overflow:auto}
+.wrap{display:flex;height:100vh;width:100vw}
+.map{flex:1 1 auto;min-width:0;border-right:1px solid #0e3866;position:relative}
+.map svg{width:100%;height:100%}
+.side{flex:0 0 360px;max-width:420px;padding:12px;overflow:auto}
+body.maponly .side{display:none}
+body.maponly .map{flex:1 1 100%}
+@media(max-width:1100px){.wrap{flex-direction:column}.map{flex:0 0 62vh;border-right:0;border-bottom:1px solid #0e3866}.side{flex:1 1 auto;max-width:none;max-height:38vh}}
 h1{font-size:15px;letter-spacing:2px;color:#00e5ff;margin:10px 16px 2px}
 .sub{font-size:10px;color:#70d8ff;margin:0 16px 8px}
 svg{display:block}
@@ -35,7 +39,7 @@ label{font-size:11px;color:#ffe600}
 <circle id="bus" class="bus" r="3" cx="0" cy="0"/>
 </g>
 </svg>
-<div class="zoom"><button id="zin">+</button><button id="zout">−</button><button id="fit">FIT</button><span>wheel / drag</span></div></div>
+<div class="zoom"><button id="zin">+</button><button id="zout">−</button><button id="fit">FIT</button><button id="maponly">MAP</button><button id="fs">FULL</button><span>wheel / drag</span></div></div>
 <div class="side">
 <div class="card"><div class="big" id="clock">--:--</div>
 <div>TIME <span id="state">RUNNING</span> · <span id="speed">0</span> km/h · ELEV <span id="elev">--</span> m · DWELL 10s</div>
@@ -66,6 +70,8 @@ svg.addEventListener('pointerup', ()=>drag=null);
 document.getElementById('zin').onclick=()=>{z=Math.min(12,z*1.3); applyMap();};
 document.getElementById('zout').onclick=()=>{z=Math.max(1,z/1.3); applyMap();};
 document.getElementById('fit').onclick=()=>{z=1; tx=0; ty=0; applyMap();};
+document.getElementById('maponly').onclick=()=>document.body.classList.toggle('maponly');
+document.getElementById('fs').onclick=()=>{if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen();};
 const clock=document.getElementById('clock');
 const speedEl=document.getElementById('speed');
 const elevEl=document.getElementById('elev');
