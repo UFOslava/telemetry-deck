@@ -3,17 +3,21 @@
 Live holographic telemetry dashboard: FastAPI backend + Vite/Three.js frontend.
 Architecture and visual spec: [live_holographic_telemetry_deck_spec.md](live_holographic_telemetry_deck_spec.md).
 
-## Run locally (front + back)
+## Run locally (front + back) — Slava-lap
 
-```bash
-cp .env.example .env        # add TomTom_API_Key for traffic data
-./scripts/dev.sh
-```
+Double-click **`Run-Deck.cmd`** (or run `scripts\Run-Dev.ps1` from PowerShell).
+Everything is preinstalled on the laptop (root `.venv` with uvicorn,
+`frontend\node_modules` with Vite). The script:
 
-The script creates `backend/.venv`, installs dependencies on change, starts
-uvicorn on `127.0.0.1:8000` and Vite on `http://localhost:5173` (which proxies
-`/api` and `/ws` to the backend). Ctrl-C stops both.
+- loads the ignored `.env` from the repo root (TomTom key),
+- starts uvicorn on `127.0.0.1:8000` and Vite on `http://localhost:5173`,
+- stops both when you press Ctrl+C.
 
+Optional ports:
+`powershell -ExecutionPolicy Bypass -File scripts\Run-Dev.ps1 -BackendPort 8010 -FrontendPort 5180`
+
+Linux/macOS equivalent: `./scripts/dev.sh` (creates `backend/.venv`, installs
+dependencies when `requirements.txt` changes, auto-picks a free frontend port).
 Overrides: `BACKEND_PORT`, `FRONTEND_PORT`, `PYTHON`.
 
 ## Containers
