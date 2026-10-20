@@ -30,6 +30,15 @@ class TestBackendAPI(unittest.TestCase):
         self.assertIn("aaMode", data)
         self.assertIn("cameraRotationSpeed", data)
         self.assertIn("cylinderRotationSpeed", data)
+        self.assertIn("issTrackingMode", data)
+
+    def test_iss_satellite_api(self):
+        response = self.client.get("/api/satellites/iss")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data.get("norad"), "25544")
+        self.assertTrue(data.get("line1", "").startswith("1 25544"))
+        self.assertTrue(data.get("line2", "").startswith("2 25544"))
 
     def test_weather_api(self):
         response = self.client.get("/api/weather")

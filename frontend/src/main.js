@@ -32,7 +32,8 @@ const DEFAULT_CONFIG = {
   cameraRotationSpeed: 0.0015,
   cylinderRotationSpeed: 0.035,
   initialCameraPitch: 58.0,
-  aaMode: 'fxaa'
+  aaMode: 'fxaa',
+  issTrackingMode: 'realtime'
 };
 
 // Kiosk / headless: load tactical parameters FROM DISK at boot (served by the backend
@@ -361,6 +362,7 @@ function animate() {
   // 5) Animate the 8-segment 45° outer cylinder spinning separately from the camera around the map
   cylinderHUD.animate(delta, cameraController.getIdleElapsed(), cameraController.isIdle);
 
+  celestialManager.updateCelestialPositions(new Date());
   celestialManager.updateSatellites(delta);
 
   // Smooth physical transit simulation along road vectors

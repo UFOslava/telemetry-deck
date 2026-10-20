@@ -8,4 +8,5 @@ __pycache__/
 venv/
 *.tif
 contours.geojson
+*_cache.json
 .DS_Store

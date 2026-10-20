@@ -12,6 +12,7 @@ load_dotenv()
 from app.config import settings
 from app.services.dem_extractor import fetch_terrarium_tile
 from app.services.traffic_poller import fetch_tomtom_traffic, cached_traffic
+from app.services.iss_fetcher import get_iss_tle
 
 app = FastAPI(title="Tactical Holographic Telemetry Deck API")
 
@@ -63,7 +64,13 @@ SETTINGS_DEFAULTS = {
     "cylinderRotationSpeed": 0.035,
     "initialCameraPitch": 58.0,
     "aaMode": "fxaa",
+    "issTrackingMode": "realtime",
 }
+
+@app.get("/api/satellites/iss")
+async def get_iss_tle_endpoint():
+    """Returns the latest Two-Line Elements (TLE) for the ISS from Celestrak."""
+    return await get_iss_tle()
 
 
 from fastapi.responses import HTMLResponse

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "d3-contour": "^4.0.2",
+    "satellite.js": "^5.0.0",
     "suncalc": "^2.1.1",
     "three": "^0.174.0"
   },

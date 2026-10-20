@@ -11,5 +11,6 @@
   "cameraRotationSpeed": 0.0015,
   "cylinderRotationSpeed": 0.035,
   "initialCameraPitch": 45,
-  "aaMode": "msaa"
+  "aaMode": "msaa",
+  "issTrackingMode": "realtime"
 }

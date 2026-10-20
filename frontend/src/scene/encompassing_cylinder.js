@@ -268,7 +268,7 @@ export class EncompassingCylinderHUD {
         addText('// RADAR ANCHOR STATUS //', yHdr, 0.20, 0x00e5ff);
         addText('YOKNEAM JCT // 32.6595 N, 35.1090 E', yMid, 0.28, 0x00e5ff);
         addText('RADIUS: 10.0 KM | GRID: 2.5 KM', ySub, 0.18, 0x70d8ff);
-        addText('SURVEILLANCE: ACTIVE (8 UNITS)', yFtr, 0.16, 0xffe600);
+        addText('SURVEILLANCE: ACTIVE // ISS TRACKED', yFtr, 0.16, 0x00ffcc);
         break;
       }
     }
