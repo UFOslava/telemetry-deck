@@ -39,6 +39,10 @@ async def periodic_traffic_poller():
         # Sleep for 5 minutes (300 seconds)
         await asyncio.sleep(settings.TRAFFIC_POLL_INTERVAL)
 
+@app.get("/api/version")
+async def version_check():
+    return {"version": os.getenv("APP_VERSION", "dev")}
+
 @app.get("/api/health")
 async def health_check():
     return {

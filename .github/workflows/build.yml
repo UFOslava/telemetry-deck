@@ -89,6 +89,7 @@ jobs:
       - name: Pull and recreate containers
         env:
           DEPLOY_DIR: /opt/stacks/telemetry-deck
+          APP_VERSION: ${{ github.sha }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_DIR"
@@ -111,3 +112,11 @@ jobs:
           echo "::error::Deck did not become healthy on http://127.0.0.1:5173/api/health"
           cd "$DEPLOY_DIR" && docker compose logs --tail=100
           exit 1
+      - name: Reload kiosk display
+        run: |
+          if systemctl cat telemetry-deck-kiosk.service >/dev/null 2>&1; then
+            sudo systemctl restart telemetry-deck-kiosk.service || echo "::warning::kiosk restart failed"
+            echo "Kiosk restarted."
+          else
+            echo "No kiosk unit on this host."
+          fi

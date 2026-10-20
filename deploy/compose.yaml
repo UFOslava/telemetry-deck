@@ -9,6 +9,7 @@ services:
       - RADIUS_KM=${RADIUS_KM:-25.0}
       - SETTINGS_FILE=/config/settings.json
       - TomTom_API_Key=${TomTom_API_Key:-}
+      - APP_VERSION=${APP_VERSION:-dev}
     volumes:
       - ./config:/config
     ports:

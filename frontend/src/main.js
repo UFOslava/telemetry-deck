@@ -301,6 +301,24 @@ const telemetry = new TelemetryStream(
 );
 telemetry.connect();
 
+// Kiosk/self-refresh: reload when the deployed image version changes.
+let deckVersion = null;
+async function checkDeckVersion() {
+  try {
+    const res = await fetch(`${API_BASE}/api/version`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!deckVersion) { deckVersion = data.version; return; }
+    if (data.version && data.version !== deckVersion) {
+      window.location.href = `${window.location.pathname}?v=${Date.now()}`;
+    }
+  } catch (e) {
+    // Backend is restarting during a deploy; retry on the next tick.
+  }
+}
+checkDeckVersion();
+setInterval(checkDeckVersion, 60000);
+
 // Window Resize Handling
 function onResize() {
   const w = window.innerWidth;
