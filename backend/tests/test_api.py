@@ -40,6 +40,20 @@ class TestBackendAPI(unittest.TestCase):
         self.assertTrue(data.get("line1", "").startswith("1 25544"))
         self.assertTrue(data.get("line2", "").startswith("2 25544"))
 
+    def test_tomtom_config_api(self):
+        response = self.client.get("/api/tomtom-config")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("configured", data)
+        self.assertIn("key", data)
+
+    def test_tomtom_search_api(self):
+        response = self.client.get("/api/tomtom/search?query=Yokneam")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("results", data)
+        self.assertIsInstance(data["results"], list)
+
     def test_weather_api(self):
         response = self.client.get("/api/weather")
         self.assertEqual(response.status_code, 200)

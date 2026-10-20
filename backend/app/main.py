@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,6 +72,47 @@ SETTINGS_DEFAULTS = {
 async def get_iss_tle_endpoint():
     """Returns the latest Two-Line Elements (TLE) for the ISS from Celestrak."""
     return await get_iss_tle()
+
+
+@app.get("/api/tomtom-config")
+async def get_tomtom_config():
+    """Returns TomTom client configuration for settings page map."""
+    key = settings.get_tomtom_key()
+    return {
+        "configured": bool(key),
+        "key": key
+    }
+
+
+@app.get("/api/tomtom/search")
+async def search_tomtom(query: str = Query(..., min_length=1)):
+    """Proxy TomTom Fuzzy Search to find coordinates for addresses/cities/landmarks."""
+    key = settings.get_tomtom_key()
+    if not key:
+        return {"results": [], "error": "TomTom API key not configured"}
+    url = f"https://api.tomtom.com/search/2/search/{query}.json"
+    params = {"key": key, "limit": 5}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for r in data.get("results", []):
+                    pos = r.get("position", {})
+                    addr = r.get("address", {}).get("freeformAddress", "")
+                    poi = r.get("poi", {}).get("name", "")
+                    name = f"{poi} - {addr}" if poi and addr and poi not in addr else (poi or addr or "Location")
+                    results.append({
+                        "name": name,
+                        "lat": pos.get("lat"),
+                        "lon": pos.get("lon"),
+                        "type": r.get("type", "")
+                    })
+                return {"results": results}
+    except Exception as e:
+        return {"results": [], "error": str(e)}
+    return {"results": []}
 
 
 from fastapi.responses import HTMLResponse

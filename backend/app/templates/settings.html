@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tactical Telemetry Deck - Settings</title>
+  <!-- TomTom Web SDK Maps -->
+  <link rel="stylesheet" type="text/css" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css" />
+  <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -57,6 +60,169 @@
       background: rgba(255, 106, 0, 0.2);
       border-color: #ff6a00;
     }
+
+    /* Interactive Map Picker Section */
+    .map-picker-card {
+      background: rgba(4, 18, 38, 0.65);
+      border: 1px solid rgba(0, 229, 255, 0.4);
+      border-radius: 4px;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+    .map-picker-title {
+      font-size: 11px;
+      color: #70d8ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .map-search-row {
+      display: flex;
+      gap: 6px;
+      position: relative;
+      margin-bottom: 8px;
+    }
+    .map-search-row input {
+      flex: 1;
+      background: rgba(14, 56, 102, 0.45);
+      border: 1px solid rgba(0, 229, 255, 0.5);
+      color: #00e5ff;
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+      border-radius: 2px;
+    }
+    .map-search-row input:focus {
+      border-color: #00e5ff;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+    }
+    .map-btn {
+      background: rgba(0, 229, 255, 0.15);
+      border: 1px solid #00e5ff;
+      color: #00e5ff;
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 2px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .map-btn:hover {
+      background: rgba(0, 229, 255, 0.35);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+    }
+    .map-btn-center {
+      border-color: #ffe600;
+      color: #ffe600;
+      background: rgba(255, 230, 0, 0.12);
+    }
+    .map-btn-center:hover {
+      background: rgba(255, 230, 0, 0.28);
+      box-shadow: 0 0 10px rgba(255, 230, 0, 0.5);
+    }
+    .search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #020e24;
+      border: 1px solid #00e5ff;
+      border-radius: 2px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9);
+      z-index: 100;
+      max-height: 180px;
+      overflow-y: auto;
+      margin-top: 4px;
+    }
+    .search-item {
+      padding: 8px 12px;
+      font-size: 11px;
+      color: #70d8ff;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.15);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .search-item:hover {
+      background: rgba(0, 229, 255, 0.25);
+      color: #00e5ff;
+    }
+
+    /* Square Map Canvas Container */
+    .tomtom-square-map-wrapper {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-height: 400px;
+      border: 1px solid rgba(0, 229, 255, 0.6);
+      border-radius: 3px;
+      position: relative;
+      background: #010814;
+      overflow: hidden;
+      margin: 8px 0;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+    }
+    #tomtom-map {
+      width: 100%;
+      height: 100%;
+    }
+    /* Tactical Crosshair at Map Center */
+    .map-center-crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 5;
+    }
+    .map-center-crosshair::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 11px;
+      width: 2px;
+      height: 24px;
+      background: rgba(0, 229, 255, 0.65);
+    }
+    .map-center-crosshair::after {
+      content: '';
+      position: absolute;
+      top: 11px;
+      left: 0;
+      width: 24px;
+      height: 2px;
+      background: rgba(0, 229, 255, 0.65);
+    }
+    .map-crosshair-reticle {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border: 1px dashed rgba(0, 229, 255, 0.7);
+      border-radius: 50%;
+    }
+    .map-readout-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #70d8ff;
+      margin-top: 6px;
+      letter-spacing: 0.5px;
+    }
+    .map-readout-row strong {
+      color: #00e5ff;
+    }
+    .map-readout-row span {
+      white-space: nowrap;
+    }
+
     .form-group {
       margin-bottom: 14px;
     }
@@ -126,6 +292,33 @@
     <div class="panel-header">
       <div class="panel-title">TACTICAL PARAMETERS [SYS]</div>
       <a href="javascript:history.back()" class="back-btn">&larr; BACK TO DECK</a>
+    </div>
+
+    <!-- TomTom Square Map & Drop-Pin Coordinate Picker -->
+    <div class="map-picker-card">
+      <div class="map-picker-title">
+        <span>RADAR ANCHOR PICKER // TOMTOM VECTOR MAP</span>
+        <span id="map-status-badge" style="color: #00ffcc; font-size: 10px;">ONLINE</span>
+      </div>
+
+      <div class="map-search-row">
+        <input type="text" id="map-search-input" placeholder="🔍 Search city, address, or landmark (e.g. Yokneam, Haifa)..." autocomplete="off" />
+        <button type="button" id="map-search-btn" class="map-btn">SEARCH</button>
+        <button type="button" id="map-center-btn" class="map-btn map-btn-center" title="Capture map center to coordinates">USE CENTER</button>
+        <div id="map-search-results" class="search-dropdown" style="display:none;"></div>
+      </div>
+
+      <div class="tomtom-square-map-wrapper">
+        <div id="tomtom-map"></div>
+        <div class="map-center-crosshair">
+          <div class="map-crosshair-reticle"></div>
+        </div>
+      </div>
+
+      <div class="map-readout-row">
+        <span>PIN: <strong id="val-pin-readout">32.6595° N, 35.1090° E</strong></span>
+        <span>CENTER: <strong id="val-center-readout">32.6595° N, 35.1090° E</strong></span>
+      </div>
     </div>
 
     <form id="settings-form">
@@ -241,6 +434,166 @@
     const roadVal = document.getElementById('val-road-op');
     roadSlider.addEventListener('input', () => { roadVal.textContent = `${roadSlider.value}%`; });
 
+    // TomTom Map & Marker State
+    let tomtomMap = null;
+    let tomtomMarker = null;
+
+    function updateCoordinates(lat, lon, panMap = false) {
+      document.getElementById('cfg-lat').value = lat.toFixed(4);
+      document.getElementById('cfg-lon').value = lon.toFixed(4);
+      document.getElementById('val-pin-readout').textContent = `${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`;
+
+      if (tomtomMarker) {
+        tomtomMarker.setLngLat([lon, lat]);
+      }
+      if (panMap && tomtomMap) {
+        tomtomMap.panTo([lon, lat]);
+      }
+    }
+
+    async function initTomTomMap(initialLat, initialLon) {
+      const badge = document.getElementById('map-status-badge');
+      try {
+        const res = await fetch('/api/tomtom-config');
+        const cfg = await res.json();
+        if (!cfg.configured || !cfg.key) {
+          badge.textContent = 'NO KEY';
+          badge.style.color = '#ff6a00';
+          return;
+        }
+
+        if (typeof tt === 'undefined') {
+          badge.textContent = 'SDK ERR';
+          badge.style.color = '#ff2244';
+          return;
+        }
+
+        const lat = parseFloat(initialLat) || 32.6595;
+        const lon = parseFloat(initialLon) || 35.1090;
+
+        tomtomMap = tt.map({
+          key: cfg.key,
+          container: 'tomtom-map',
+          center: [lon, lat],
+          zoom: 12,
+          stylesVisibility: {
+            trafficIncidents: true,
+            trafficFlow: true
+          }
+        });
+
+        tomtomMap.addControl(new tt.NavigationControl());
+
+        tomtomMarker = new tt.Marker({
+          draggable: true,
+          color: '#00e5ff'
+        })
+        .setLngLat([lon, lat])
+        .addTo(tomtomMap);
+
+        updateCoordinates(lat, lon);
+
+        // Marker dragend
+        tomtomMarker.on('dragend', () => {
+          const pos = tomtomMarker.getLngLat();
+          updateCoordinates(pos.lat, pos.lng);
+        });
+
+        // Map click places pin
+        tomtomMap.on('click', (e) => {
+          updateCoordinates(e.lngLat.lat, e.lngLat.lng);
+        });
+
+        // Map pan/move updates center readout
+        tomtomMap.on('move', () => {
+          const c = tomtomMap.getCenter();
+          document.getElementById('val-center-readout').textContent = `${c.lat.toFixed(4)}° N, ${c.lng.toFixed(4)}° E`;
+        });
+
+        // "USE CENTER" button
+        document.getElementById('map-center-btn').addEventListener('click', () => {
+          const c = tomtomMap.getCenter();
+          updateCoordinates(c.lat, c.lng);
+        });
+
+        // Two-way sync: manual input changes update map pin
+        const onManualChange = () => {
+          const nLat = parseFloat(document.getElementById('cfg-lat').value);
+          const nLon = parseFloat(document.getElementById('cfg-lon').value);
+          if (!isNaN(nLat) && !isNaN(nLon)) {
+            updateCoordinates(nLat, nLon, true);
+          }
+        };
+        document.getElementById('cfg-lat').addEventListener('change', onManualChange);
+        document.getElementById('cfg-lon').addEventListener('change', onManualChange);
+
+        tomtomMap.on('load', () => {
+          tomtomMap.resize();
+        });
+        setTimeout(() => { tomtomMap.resize(); }, 300);
+
+      } catch (err) {
+        badge.textContent = 'OFFLINE';
+        badge.style.color = '#ff2244';
+      }
+    }
+
+    // TomTom Fuzzy Search
+    const searchInput = document.getElementById('map-search-input');
+    const searchBtn = document.getElementById('map-search-btn');
+    const searchDropdown = document.getElementById('map-search-results');
+
+    async function performSearch() {
+      const query = searchInput.value.trim();
+      if (!query) return;
+
+      searchDropdown.style.display = 'block';
+      searchDropdown.innerHTML = '<div class="search-item" style="color: #70d8ff;">Searching TomTom radar...</div>';
+
+      try {
+        const res = await fetch(`/api/tomtom/search?query=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (!data.results || data.results.length === 0) {
+          searchDropdown.innerHTML = '<div class="search-item" style="color: #ff6a00;">No results found.</div>';
+          setTimeout(() => { searchDropdown.style.display = 'none'; }, 2500);
+          return;
+        }
+
+        searchDropdown.innerHTML = '';
+        data.results.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'search-item';
+          row.innerHTML = `<strong>${item.name}</strong> <span style="font-size: 10px; opacity: 0.7;">(${item.lat.toFixed(4)}, ${item.lon.toFixed(4)})</span>`;
+          row.addEventListener('click', () => {
+            updateCoordinates(item.lat, item.lon, true);
+            if (tomtomMap) {
+              tomtomMap.flyTo({ center: [item.lon, item.lat], zoom: 13 });
+            }
+            searchInput.value = item.name;
+            searchDropdown.style.display = 'none';
+          });
+          searchDropdown.appendChild(row);
+        });
+
+      } catch (e) {
+        searchDropdown.innerHTML = `<div class="search-item" style="color: #ff2244;">Search error: ${e.message}</div>`;
+      }
+    }
+
+    searchBtn.addEventListener('click', performSearch);
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        performSearch();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.map-search-row') && !e.target.closest('#map-search-results')) {
+        searchDropdown.style.display = 'none';
+      }
+    });
+
     async function loadSettings() {
       try {
         const res = await fetch('/api/settings');
@@ -262,6 +615,10 @@
         document.getElementById('cfg-camera-pitch').value = data.initialCameraPitch !== undefined ? data.initialCameraPitch : 58;
         if (data.aaMode) document.getElementById('cfg-aa-mode').value = data.aaMode;
         if (data.issTrackingMode) document.getElementById('cfg-iss-mode').value = data.issTrackingMode;
+
+        // Initialize TomTom Map
+        initTomTomMap(data.centerLat, data.centerLon);
+
       } catch (err) {
         document.getElementById('status-msg').textContent = 'Failed to load settings: ' + err.message;
       }
