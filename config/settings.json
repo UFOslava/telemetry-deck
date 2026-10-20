@@ -6,11 +6,11 @@
   "contourOpacity": 0.42,
   "roadColor": 16770560,
   "roadOpacity": 0.95,
-  "idleTimeoutMs": 30000,
+  "idleTimeoutMs": 20000,
   "idleRotationSpeed": 0.0015,
   "cameraRotationSpeed": 0.0015,
-  "cylinderRotationSpeed": 0.035,
+  "cylinderRotationSpeed": 0.07,
   "initialCameraPitch": 45,
-  "aaMode": "msaa",
+  "aaMode": "fxaa",
   "issTrackingMode": "realtime"
 }

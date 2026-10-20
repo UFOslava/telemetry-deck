@@ -4,14 +4,13 @@ import { createHUDText } from './vector_font.js';
 /**
  * Bus route inspection overlay.
  *
- * This is a PROJECTION LAYER above the terrain, deliberately separate from the
- * main terrain compass circle (polar_grid.js):
- *   - its own amber encompassing circle + tick ring,
- *   - a Cartesian grid clipped to that circle,
- *   - a flattened, centred route ribbon with stations, all at one Y height,
- *   - a radial dim veil that darkens the map/elements underneath.
- *
- * Nothing here touches the main polar grid.
+ * This is an elevated projection layer above the terrain:
+ *   - The flat map size matches the main map compass size (overlayRadius = radiusKm),
+ *   - Its own amber encompassing circle + tick ring,
+ *   - A Cartesian grid clipped to the circle,
+ *   - Route and stations overlay their exact real-world coordinates directly above the map,
+ *   - Stations cast vertical drop-pins down to the main map terrain, stopping at the correct height values,
+ *   - A radial dim veil darkens the terrain and roads below by ~40-50%.
  */
 export class RouteInspectionPlane {
   constructor(scene, camera, options = {}) {
@@ -22,7 +21,8 @@ export class RouteInspectionPlane {
     this.onClear = options.onClear || null;
 
     this.radiusKm = options.radiusKm || 10.0;
-    this.overlayRadius = Math.min(8.5, Math.max(4.5, this.radiusKm * 0.7));
+    // Flat map size matches the main map compass size
+    this.overlayRadius = this.radiusKm;
     this.planeHeight = 5.2;          // above the 4.4 km cylinder HUD top
     this.veilHeight = 4.85;
 
@@ -38,6 +38,21 @@ export class RouteInspectionPlane {
     this.buildStaticLayer();
   }
 
+  setRadius(radiusKm) {
+    this.radiusKm = radiusKm;
+    this.overlayRadius = radiusKm;
+    while (this.staticGroup.children.length > 0) {
+      const obj = this.staticGroup.children.pop();
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+    }
+    this.buildStaticLayer();
+    if (this.selectedBus) {
+      this.clearDynamic();
+      this.buildFlattenedRoute(this.selectedBus);
+    }
+  }
+
   // ---------------------------------------------------------------- static
   buildStaticLayer() {
     this.buildDimVeil();
@@ -51,7 +66,7 @@ export class RouteInspectionPlane {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uColor: { value: new THREE.Color(0x01050d) },
-        uOpacity: { value: 0.5 }
+        uOpacity: { value: 0.45 }
       },
       vertexShader: `
         varying vec2 vUv;
@@ -66,7 +81,7 @@ export class RouteInspectionPlane {
         varying vec2 vUv;
         void main() {
           float d = length(vUv - 0.5) * 2.0;
-          float a = uOpacity * (1.0 - smoothstep(0.35, 1.0, d));
+          float a = uOpacity * (1.0 - smoothstep(0.40, 1.0, d));
           gl_FragColor = vec4(uColor, a);
         }
       `,
@@ -85,8 +100,8 @@ export class RouteInspectionPlane {
     const R = this.overlayRadius;
     const y = this.planeHeight;
 
-    // Faint surface so the projection reads as a separate pane, not the map.
-    const fillGeo = new THREE.CircleGeometry(R, 96);
+    // Faint surface so the projection reads as a separate pane matching compass size
+    const fillGeo = new THREE.CircleGeometry(R, 128);
     const fillMat = new THREE.MeshBasicMaterial({
       color: 0x001018,
       transparent: true,
@@ -100,8 +115,8 @@ export class RouteInspectionPlane {
     fill.renderOrder = 10;
     this.staticGroup.add(fill);
 
-    // Amber encompassing ring (distinct from the cyan main compass circle).
-    const ringGeo = new THREE.RingGeometry(R - 0.04, R + 0.04, 128);
+    // Amber encompassing ring matching main compass perimeter
+    const ringGeo = new THREE.RingGeometry(R - 0.05, R + 0.05, 128);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xff8f00,
       transparent: true,
@@ -116,14 +131,14 @@ export class RouteInspectionPlane {
     ring.renderOrder = 11;
     this.staticGroup.add(ring);
 
-    // Tick band, longer every 90 degrees.
+    // Tick band around compass perimeter
     const tickPositions = [];
     const ticks = 72;
     for (let i = 0; i < ticks; i++) {
       const a = (i / ticks) * Math.PI * 2;
       const long = i % 18 === 0;
-      const r0 = R + 0.04;
-      const r1 = R + (long ? 0.34 : 0.18);
+      const r0 = R + 0.05;
+      const r1 = R + (long ? 0.40 : 0.20);
       tickPositions.push(Math.cos(a) * r0, y, Math.sin(a) * r0);
       tickPositions.push(Math.cos(a) * r1, y, Math.sin(a) * r1);
     }
@@ -156,9 +171,9 @@ export class RouteInspectionPlane {
       positions.push(-x, y, z, x, y, z);
     }
 
-    // Centre crosshair.
-    positions.push(-0.35, y, 0, 0.35, y, 0);
-    positions.push(0, y, -0.35, 0, y, 0.35);
+    // Centre crosshair
+    positions.push(-0.4, y, 0, 0.4, y, 0);
+    positions.push(0, y, -0.4, 0, y, 0.4);
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -194,8 +209,10 @@ export class RouteInspectionPlane {
     this.selectedBus = null;
     this.group.visible = false;
     this.clearDynamic();
-    const panel = document.getElementById('transit-route-panel');
-    if (panel) panel.style.display = 'none';
+    if (typeof document !== 'undefined') {
+      const panel = document.getElementById('transit-route-panel');
+      if (panel) panel.style.display = 'none';
+    }
     if (wasSelected && this.onClear) this.onClear();
   }
 
@@ -213,38 +230,19 @@ export class RouteInspectionPlane {
   }
 
   // ------------------------------------------------------------- geometry
-  fitRoute(path) {
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const p of path) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.z < minZ) minZ = p.z;
-      if (p.z > maxZ) maxZ = p.z;
-    }
-    const cx = (minX + maxX) / 2;
-    const cz = (minZ + maxZ) / 2;
-    const centred = path.map(p => ({ x: p.x - cx, z: p.z - cz }));
-    let maxR = 0;
-    for (const p of centred) {
-      const r = Math.hypot(p.x, p.z);
-      if (r > maxR) maxR = r;
-    }
-    // Fill the inspection circle instead of leaving the route floating in it.
-    const fit = (this.overlayRadius * 0.82) / Math.max(maxR, 0.0001);
-    return centred.map(p => ({ x: p.x * fit, z: p.z * fit }));
-  }
-
   buildFlattenedRoute(bus) {
-    const y = this.planeHeight + 0.02;
-    const pts = this.fitRoute(bus.roadPath);
+    const y_plane = this.planeHeight + 0.02;
+    // Overlay real world locations precisely without artificial shifting or scaling
+    const pts = bus.roadPath;
+    if (!pts || pts.length < 2) return;
 
-    // Glow underlay + crisp flat ribbon.
-    const glowGeo = this.buildRibbonGeometry(pts, 0.26, y + 0.001);
+    // 1. Glow underlay + crisp flat route ribbon on the elevated plane
+    const glowGeo = this.buildRibbonGeometry(pts, 0.28, y_plane + 0.001);
     if (glowGeo) {
       const glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({
         color: 0x00e5ff,
         transparent: true,
-        opacity: 0.16,
+        opacity: 0.20,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide
@@ -253,7 +251,7 @@ export class RouteInspectionPlane {
       this.dynamicGroup.add(glow);
     }
 
-    const routeGeo = this.buildRibbonGeometry(pts, 0.10, y + 0.002);
+    const routeGeo = this.buildRibbonGeometry(pts, 0.12, y_plane + 0.002);
     if (routeGeo) {
       const route = new THREE.Mesh(routeGeo, new THREE.MeshBasicMaterial({
         color: 0x00e5ff,
@@ -267,13 +265,15 @@ export class RouteInspectionPlane {
       this.dynamicGroup.add(route);
     }
 
-    // Stations: evenly spaced by arc length, flat on the same plane.
+    // 2. Stations and vertical drop-pins: evenly spaced by arc length
     const cumulative = [0];
     for (let i = 1; i < pts.length; i++) {
       cumulative.push(cumulative[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
     }
     const total = cumulative[cumulative.length - 1] || 1;
     const stopCount = 6;
+
+    const tetherPoints = [];
 
     for (let s = 0; s < stopCount; s++) {
       const target = (s / (stopCount - 1)) * total;
@@ -289,8 +289,12 @@ export class RouteInspectionPlane {
       const nx = -tz;
       const nz = tx;
 
+      // Exact terrain elevation on the main map
+      const y_ground = (p.groundY !== undefined ? p.groundY : p.y) || 0.05;
+
+      // Elevated station dot
       const dot = new THREE.Mesh(
-        new THREE.CircleGeometry(0.05, 16),
+        new THREE.CircleGeometry(0.06, 16),
         new THREE.MeshBasicMaterial({
           color: 0xe0f7fa,
           transparent: true,
@@ -301,12 +305,13 @@ export class RouteInspectionPlane {
         })
       );
       dot.rotation.x = -Math.PI / 2;
-      dot.position.set(p.x, y + 0.006, p.z);
+      dot.position.set(p.x, y_plane + 0.006, p.z);
       dot.renderOrder = 14;
       this.dynamicGroup.add(dot);
 
+      // Elevated station outer ring
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.09, 0.13, 20),
+        new THREE.RingGeometry(0.10, 0.15, 24),
         new THREE.MeshBasicMaterial({
           color: 0xffe600,
           transparent: true,
@@ -317,25 +322,106 @@ export class RouteInspectionPlane {
         })
       );
       ring.rotation.x = -Math.PI / 2;
-      ring.position.set(p.x, y + 0.005, p.z);
+      ring.position.set(p.x, y_plane + 0.005, p.z);
       ring.renderOrder = 14;
       this.dynamicGroup.add(ring);
 
+      // Station label on elevated plane
       const label = createHUDText(`ST 0${s + 1}`, {
-        size: 0.16,
+        size: 0.18,
         color: 0xffe600,
         opacity: 0.9,
         align: 'center'
       });
       label.rotation.x = -Math.PI / 2;
-      label.position.set(p.x + nx * 0.3, y + 0.012, p.z + nz * 0.3);
+      label.position.set(p.x + nx * 0.35, y_plane + 0.012, p.z + nz * 0.35);
       label.renderOrder = 15;
       this.dynamicGroup.add(label);
 
-      this.stops.push({ label: `ST 0${s + 1}`, km: ((s / (stopCount - 1)) * (bus.pathLengthKm || 0)).toFixed(1) });
+      // 3. Drop-Pin line connecting elevated station down to the main map terrain:
+      tetherPoints.push(p.x, y_plane, p.z);
+      tetherPoints.push(p.x, y_ground, p.z);
+
+      // Ground Target Foot on the main map terrain, stopping precisely at y_ground:
+      const groundRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.09, 0.14, 20),
+        new THREE.MeshBasicMaterial({
+          color: 0xffe600,
+          transparent: true,
+          opacity: 0.85,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        })
+      );
+      groundRing.rotation.x = -Math.PI / 2;
+      groundRing.position.set(p.x, y_ground + 0.004, p.z);
+      groundRing.renderOrder = 14;
+      this.dynamicGroup.add(groundRing);
+
+      const groundDot = new THREE.Mesh(
+        new THREE.CircleGeometry(0.04, 16),
+        new THREE.MeshBasicMaterial({
+          color: 0xe0f7fa,
+          transparent: true,
+          opacity: 0.95,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        })
+      );
+      groundDot.rotation.x = -Math.PI / 2;
+      groundDot.position.set(p.x, y_ground + 0.005, p.z);
+      groundDot.renderOrder = 14;
+      this.dynamicGroup.add(groundDot);
+
+      // Reticle crosshair on ground foot
+      const crossSize = 0.20;
+      const crossPositions = [
+        p.x - crossSize, y_ground + 0.006, p.z,   p.x + crossSize, y_ground + 0.006, p.z,
+        p.x, y_ground + 0.006, p.z - crossSize,   p.x, y_ground + 0.006, p.z + crossSize
+      ];
+      const crossGeo = new THREE.BufferGeometry();
+      crossGeo.setAttribute('position', new THREE.Float32BufferAttribute(crossPositions, 3));
+      const crossMat = new THREE.LineBasicMaterial({
+        color: 0x00e5ff,
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const crossLines = new THREE.LineSegments(crossGeo, crossMat);
+      crossLines.renderOrder = 14;
+      this.dynamicGroup.add(crossLines);
+
+      this.stops.push({
+        label: `ST 0${s + 1}`,
+        km: ((s / (stopCount - 1)) * (bus.pathLengthKm || 0)).toFixed(1),
+        elevM: Math.round((y_ground / 3.0) * 1000)
+      });
     }
 
-    // Route identity, flat at the top of the circle.
+    // Vertical drop-pin lines
+    if (tetherPoints.length > 0) {
+      const tetherGeo = new THREE.BufferGeometry();
+      tetherGeo.setAttribute('position', new THREE.Float32BufferAttribute(tetherPoints, 3));
+      const tetherMat = new THREE.LineDashedMaterial({
+        color: 0xffe600,
+        dashSize: 0.18,
+        gapSize: 0.10,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const tethers = new THREE.LineSegments(tetherGeo, tetherMat);
+      tethers.computeLineDistances();
+      tethers.renderOrder = 14;
+      tethers.userData = { isStationTethers: true };
+      this.dynamicGroup.add(tethers);
+    }
+
+    // Route identity title flat at northern edge of compass
     const title = createHUDText(`LINE ${bus.line || '--'} // ${bus.callsign || 'BUS'}`, {
       size: 0.24,
       color: 0x00e5ff,
@@ -343,7 +429,7 @@ export class RouteInspectionPlane {
       align: 'center'
     });
     title.rotation.x = -Math.PI / 2;
-    title.position.set(0, this.planeHeight + 0.02, -this.overlayRadius * 0.88);
+    title.position.set(0, this.planeHeight + 0.02, -this.overlayRadius * 0.90);
     title.renderOrder = 15;
     this.dynamicGroup.add(title);
   }
@@ -382,6 +468,7 @@ export class RouteInspectionPlane {
 
   // ---------------------------------------------------------------- panel
   renderInfoPanel(bus) {
+    if (typeof document === 'undefined') return;
     let panel = document.getElementById('transit-route-panel');
     if (!panel) {
       panel = document.createElement('div');
@@ -390,7 +477,7 @@ export class RouteInspectionPlane {
     }
 
     const stopRows = this.stops
-      .map(s => `<div>${s.label} - ${s.km} km</div>`)
+      .map(s => `<div>${s.label} (${s.elevM}m elev) - ${s.km} km</div>`)
       .join('');
 
     panel.style.display = 'block';
