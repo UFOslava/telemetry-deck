@@ -34,7 +34,7 @@ export class EncompassingCylinderHUD {
     this.barHeight = 2.1; // km (was 0.52)
     this.baseY = 2.3;     // km (was 1.15)
 
-    this.spinSpeed = 0.035; // rad per second - steady independent spin around map
+    this.spinSpeed = this.config.cylinderRotationSpeed !== undefined ? this.config.cylinderRotationSpeed : 0.035; // rad per second - steady independent spin around map
     this.rotationAngle = 0;
 
     this.group = new THREE.Group();

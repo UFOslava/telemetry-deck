@@ -28,6 +28,8 @@ class TestBackendAPI(unittest.TestCase):
         self.assertIn("radiusKm", data)
         self.assertIn("initialCameraPitch", data)
         self.assertIn("aaMode", data)
+        self.assertIn("cameraRotationSpeed", data)
+        self.assertIn("cylinderRotationSpeed", data)
 
     def test_weather_api(self):
         response = self.client.get("/api/weather")

@@ -6,7 +6,7 @@ export class CameraController {
     this.domElement = domElement;
 
     // Config options
-    this.idleRotationSpeed = options.idleRotationSpeed || 0.0015; // rad per frame
+    this.idleRotationSpeed = options.cameraRotationSpeed !== undefined ? options.cameraRotationSpeed : (options.idleRotationSpeed !== undefined ? options.idleRotationSpeed : 0.0015); // rad per frame
     this.idleTimeoutMs = options.idleTimeoutMs || 30000;          // 30 seconds
     this.pitch = options.pitch || (60 * Math.PI / 180);           // 60 degrees
     this.distance = options.distance || 19.5;                     // Tactical distance for 10km radius

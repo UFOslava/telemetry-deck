@@ -181,14 +181,27 @@
           <input type="number" step="5" min="5" id="cfg-idle-timeout" required />
         </div>
         <div class="form-group">
-          <label>Idle Rotation Speed</label>
-          <select id="cfg-idle-speed">
-            <option value="0.001">Subtle (0.001 rad/f)</option>
-            <option value="0.0015">Standard (0.0015 rad/f)</option>
+          <label>Camera Rotation Speed (Idle)</label>
+          <select id="cfg-camera-speed">
+            <option value="0.0008">Subtle (0.0008 rad/f)</option>
+            <option value="0.0015" selected>Standard (0.0015 rad/f)</option>
             <option value="0.003">Dynamic (0.003 rad/f)</option>
-            <option value="0">Locked (No Rotation)</option>
+            <option value="0.005">Fast (0.005 rad/f)</option>
+            <option value="0">Locked (Static on Map)</option>
           </select>
         </div>
+      </div>
+
+      <div class="form-group">
+        <label>Encompassing Cylinder Rotation Speed</label>
+        <select id="cfg-cylinder-speed">
+          <option value="0.015">Slow Orbit (0.015 rad/s)</option>
+          <option value="0.035" selected>Standard Orbit (0.035 rad/s)</option>
+          <option value="0.070">Dynamic Orbit (0.070 rad/s)</option>
+          <option value="0.120">Rapid Orbit (0.120 rad/s)</option>
+          <option value="0">Locked (Static on Map)</option>
+          <option value="-0.035">Reverse Orbit (-0.035 rad/s)</option>
+        </select>
       </div>
 
       <div class="form-group">
@@ -235,7 +248,9 @@
         document.getElementById('cfg-road-op').value = Math.round(data.roadOpacity * 100);
         roadVal.textContent = `${Math.round(data.roadOpacity * 100)}%`;
         document.getElementById('cfg-idle-timeout').value = Math.round(data.idleTimeoutMs / 1000);
-        document.getElementById('cfg-idle-speed').value = String(data.idleRotationSpeed);
+        const camSpeed = data.cameraRotationSpeed !== undefined ? data.cameraRotationSpeed : data.idleRotationSpeed;
+        if (camSpeed !== undefined) document.getElementById('cfg-camera-speed').value = String(camSpeed);
+        if (data.cylinderRotationSpeed !== undefined) document.getElementById('cfg-cylinder-speed').value = String(data.cylinderRotationSpeed);
         document.getElementById('cfg-camera-pitch').value = data.initialCameraPitch !== undefined ? data.initialCameraPitch : 58;
         if (data.aaMode) document.getElementById('cfg-aa-mode').value = data.aaMode;
       } catch (err) {
@@ -247,6 +262,8 @@
       e.preventDefault();
       const statusEl = document.getElementById('status-msg');
       statusEl.textContent = 'Saving...';
+      const camSpeedVal = parseFloat(document.getElementById('cfg-camera-speed').value);
+      const cylSpeedVal = parseFloat(document.getElementById('cfg-cylinder-speed').value);
       const payload = {
         centerLat: parseFloat(document.getElementById('cfg-lat').value),
         centerLon: parseFloat(document.getElementById('cfg-lon').value),
@@ -256,7 +273,9 @@
         roadColor: parseInt(document.getElementById('cfg-road-color').value, 10),
         roadOpacity: parseInt(roadSlider.value, 10) / 100,
         idleTimeoutMs: parseInt(document.getElementById('cfg-idle-timeout').value, 10) * 1000,
-        idleRotationSpeed: parseFloat(document.getElementById('cfg-idle-speed').value),
+        cameraRotationSpeed: camSpeedVal,
+        idleRotationSpeed: camSpeedVal,
+        cylinderRotationSpeed: cylSpeedVal,
         initialCameraPitch: parseFloat(document.getElementById('cfg-camera-pitch').value),
         aaMode: document.getElementById('cfg-aa-mode').value,
       };

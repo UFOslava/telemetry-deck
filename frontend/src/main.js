@@ -29,6 +29,8 @@ const DEFAULT_CONFIG = {
   roadOpacity: 0.95,
   idleTimeoutMs: 30000,
   idleRotationSpeed: 0.0015,
+  cameraRotationSpeed: 0.0015,
+  cylinderRotationSpeed: 0.035,
   initialCameraPitch: 58.0,
   aaMode: 'fxaa'
 };
@@ -70,7 +72,8 @@ scene.background = new THREE.Color(0x01050d);
 
 const camera = setupCamera(window.innerWidth, window.innerHeight);
 const cameraController = new CameraController(camera, renderer.domElement, {
-  idleRotationSpeed: currentConfig.idleRotationSpeed,
+  cameraRotationSpeed: currentConfig.cameraRotationSpeed !== undefined ? currentConfig.cameraRotationSpeed : currentConfig.idleRotationSpeed,
+  idleRotationSpeed: currentConfig.cameraRotationSpeed !== undefined ? currentConfig.cameraRotationSpeed : currentConfig.idleRotationSpeed,
   idleTimeoutMs: currentConfig.idleTimeoutMs,
   distance: currentConfig.radiusKm * 1.95,
   pitch: ((currentConfig.initialCameraPitch !== undefined ? currentConfig.initialCameraPitch : 58) * Math.PI) / 180

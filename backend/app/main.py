@@ -59,6 +59,8 @@ SETTINGS_DEFAULTS = {
     "roadOpacity": 0.95,
     "idleTimeoutMs": 30000,
     "idleRotationSpeed": 0.0015,
+    "cameraRotationSpeed": 0.0015,
+    "cylinderRotationSpeed": 0.035,
     "initialCameraPitch": 58.0,
     "aaMode": "fxaa",
 }
