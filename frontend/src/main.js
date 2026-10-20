@@ -110,7 +110,11 @@ const stationManager = new TrainStationManager(scene, camera, svgOverlay, curren
 // Bus route inspection overlay: its own circle/grid/route pane above the map.
 // It does not touch the main terrain compass circle (polarGrid).
 const routeInspectionPlane = new RouteInspectionPlane(scene, camera, {
-  radiusKm: currentConfig.radiusKm
+  radiusKm: currentConfig.radiusKm,
+  // Lift the whole view (camera + look-at) onto the overlay plane, and return
+  // to the map origin when the route is deselected.
+  onSelect: () => cameraController.focusPlane(routeInspectionPlane.planeHeight + 0.15),
+  onClear: () => cameraController.clearViewOffset()
 });
 
 // Contours Layer (4-quadrant stitched DEM)
@@ -150,8 +154,8 @@ function rebuildContours() {
 // Telemetry Drop-Pins Manager
 const pinsManager = new TelemetryPinsManager(scene, camera, svgOverlay, {
   onSelect: (entity) => {
-    if (entity.type === 'transit') {
-      routeInspectionPlane.selectBus(entity);
+    if (entity.type === 'transit' && entity.lineData) {
+      routeInspectionPlane.selectRoute(entity.lineData);
     }
   }
 });
@@ -176,8 +180,9 @@ async function loadLayers() {
     // 4. Train Stations (3D Vector Stroke Flag & 30m Countdown Bar)
     stationManager.buildStations(sampleElevation);
 
-    // 5. Seed smooth transit fleet along continuous multi-kilometer routes
-    initTransitVehicles();
+    // 5. Load the one real line we support today (line 16) and keep the
+    //    simulated bus fleet out of the deck entirely.
+    await initTransitVehicles();
 
     // 6. Fetch live TomTom traffic flow from backend
     fetchTrafficFlow();
@@ -198,47 +203,63 @@ async function fetchTrafficFlow() {
   }
 }
 
-function initTransitVehicles() {
-  const routes = roadManager.continuousRoutes;
-  const railPaths = roadManager.railwayPaths;
-  const entities = [];
+function hhmmss(str) {
+  const p = String(str || "00:00:00").split(':').map(Number);
+  return (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0);
+}
 
-  if (routes.length > 0) {
-    const busLineConfigs = [
-      { line: '180', name: 'BUS 180 (Route 70 Express)', speed: 65, routeName: 'Route 70' },
-      { line: '188', name: 'BUS 188 (Route 70 Local)',   speed: 55, routeName: 'Route 70' },
-      { line: '157', name: 'BUS 157 (Highway 6 North)',  speed: 80, routeName: 'Highway 6' },
-      { line: '160', name: 'BUS 160 (Highway 6 South)',  speed: 75, routeName: 'Highway 6' },
-      { line: '50',  name: 'BUS 50 (Yokneam Tech)',      speed: 42, routeName: 'Yokneam City' },
-      { line: '19',  name: 'BUS 19 (Yokneam Illit)',     speed: 38, routeName: 'Yokneam City' },
-      { line: '301', name: 'BUS 301 (Route 66 Regional)',speed: 68, routeName: 'Route 66' },
-      { line: '722', name: 'BUS 722 (Kfar Yehoshua)',    speed: 60, routeName: 'Route 722' }
-    ];
+let line16Data = null;
+let line16Entity = null;
 
-    busLineConfigs.forEach((cfg, i) => {
-      let matchedRoute = routes.find(r => r.name === cfg.routeName) || routes[i % routes.length];
-      const initialProgress = ((i * 0.28) % 0.85) + 0.05;
-      const initialIdx = Math.floor(initialProgress * (matchedRoute.points.length - 1));
-      const pt = matchedRoute.points[initialIdx];
+/** Position of the line-16 bus for the current time of day, from the trip samples. */
+function line16SampleNow() {
+  if (!line16Data || !Array.isArray(line16Data.samples) || !line16Data.samples.length) return null;
+  const now = new Date();
+  const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  const startSec = hhmmss(line16Data.scheduled_start);
+  const endSec = hhmmss(line16Data.scheduled_end);
+  const elapsed = Math.max(0, Math.min(endSec - startSec, nowSec - startSec));
 
-      entities.push({
-        id: `TR${(i + 1).toString().padStart(2, '0')}`,
-        callsign: cfg.name,
-        type: 'transit',
-        line: cfg.line,
-        roadPath: matchedRoute.points,
-        pathLengthKm: matchedRoute.lengthKm,
-        pathProgress: initialProgress,
-        direction: i % 2 === 0 ? 1 : -1,
-        speedKmh: cfg.speed,
-        x: pt.x,
-        y: pt.y + 0.12,
-        z: pt.z,
-        groundY: pt.y
-      });
-    });
+  const samples = line16Data.samples;
+  let lo = 0, hi = samples.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (samples[mid].t <= elapsed) lo = mid;
+    else hi = mid - 1;
   }
+  const a = samples[lo];
+  const b = samples[Math.min(lo + 1, samples.length - 1)];
+  const span = (b.t - a.t) || 1;
+  const f = Math.max(0, Math.min(1, (elapsed - a.t) / span));
+  return {
+    x: a.xy[0] + (b.xy[0] - a.xy[0]) * f,
+    z: a.xy[1] + (b.xy[1] - a.xy[1]) * f,
+    groundY: a.ground_y + (b.ground_y - a.ground_y) * f,
+    v: a.v + (b.v - a.v) * f
+  };
+}
 
+function updateLine16Position() {
+  if (!line16Entity) return;
+  const s = line16SampleNow();
+  if (!s) return;
+  line16Entity.x = s.x;
+  line16Entity.z = s.z;
+  line16Entity.groundY = s.groundY;
+  line16Entity.y = s.groundY + 0.12;
+  line16Entity.speedKmh = s.v;
+}
+
+/**
+ * Load the real GTFS line-16 trip (route shape, stops, timetable, simulation
+ * samples). The simulated multi-line bus fleet is intentionally gone: until the
+ * area query is enabled, line 16 is the only bus on the deck.
+ */
+async function initTransitVehicles() {
+  const entities = [];
+  const railPaths = roadManager.railwayPaths;
+
+  // Rail stays as a separate feature (not a bus line).
   if (railPaths.length > 0) {
     const rail = railPaths[0];
     const pt = rail.points[Math.floor(rail.points.length * 0.4)];
@@ -259,12 +280,45 @@ function initTransitVehicles() {
     });
   }
 
+  try {
+    const res = await fetch('/data/line16_test.json', { cache: 'no-store' });
+    if (res.ok) {
+      line16Data = await res.json();
+      const s0 = line16Data.samples?.[0];
+      const first = s0 ? { x: s0.xy[0], z: s0.xy[1], y: s0.y, groundY: s0.ground_y } : { x: 0, y: 0.1, z: 0, groundY: 0 };
+      line16Entity = {
+        id: 'BUS16',
+        callsign: `BUS ${line16Data.line}`,
+        type: 'transit',
+        line: line16Data.line,
+        roadPath: line16Data.path.map(([x, z], i) => ({ x, z, y: line16Data.path_y?.[i] ?? 0 })),
+        pathLengthKm: line16Data.path_km,
+        pathProgress: 0,
+        direction: 1,
+        speedKmh: s0?.v || 0,
+        x: first.x,
+        z: first.z,
+        y: first.y,
+        groundY: first.groundY,
+        scheduleDriven: true,
+        lineData: line16Data
+      };
+      entities.push(line16Entity);
+      updateLine16Position();
+    } else {
+      console.warn('[transit] line 16 data missing:', res.status);
+    }
+  } catch (err) {
+    console.warn('[transit] line 16 load failed:', err);
+  }
+
   activeTransitEntities = entities;
   pinsManager.setEntities(entities);
 
   const countReadout = document.getElementById('target-count-readout');
   if (countReadout) {
-    countReadout.textContent = `TRANSIT: ${entities.length} ACTIVE (3D VECTOR FLAGS)`;
+    const buses = entities.filter(e => e.type === 'transit').length;
+    countReadout.textContent = `TRANSIT: ${buses} BUS LINE${buses === 1 ? '' : 'S'} (GTFS) | RAIL: ${entities.length - buses}`;
   }
 }
 
@@ -335,6 +389,16 @@ document.getElementById('open-settings-btn')?.addEventListener('click', () => {
   window.location.href = '/settings';
 });
 
+// LAN settings QR (backend builds the URL from the request host)
+const qrImg = document.getElementById('settings-qr');
+if (qrImg) {
+  qrImg.src = `${API_BASE}/api/qr/settings`;
+  qrImg.addEventListener('error', () => {
+    const block = document.getElementById('settings-qr-block');
+    if (block) block.style.display = 'none';
+  });
+}
+
 // Deselect route on ESC key or clicking in the empty spot
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -383,7 +447,9 @@ function animate() {
   celestialManager.updateCelestialPositions(new Date());
   celestialManager.updateSatellites(delta);
 
-  // Smooth physical transit simulation along road vectors
+  // Schedule-driven bus position first, then rebuild the pin meshes.
+  updateLine16Position();
+  routeInspectionPlane.update(delta);
   pinsManager.updateSimulation(delta, roadManager, sampleElevation);
 
   celestialManager.checkHover();
@@ -406,13 +472,17 @@ function animate() {
 if (import.meta.env.DEV) {
   window.__deckDebug = {
     selectBus: (i = 0) => {
-      const buses = activeTransitEntities.filter(e => e.type === 'transit');
+      const buses = activeTransitEntities.filter(e => e.type === 'transit' && e.lineData);
       if (!buses.length) return null;
       const bus = buses[i % buses.length];
-      routeInspectionPlane.selectBus(bus);
+      routeInspectionPlane.selectRoute(bus.lineData);
       return bus.callsign;
     },
     clear: () => routeInspectionPlane.clear(),
+    cameraOffset: () => ({
+      current: cameraController.offset.toArray().map(v => +v.toFixed(3)),
+      target: cameraController.targetOffset.toArray().map(v => +v.toFixed(3))
+    }),
     state: () => {
       const d = routeInspectionPlane.dynamicGroup;
       const ribbon = d.children.find(o => o.isMesh && o.geometry?.attributes?.position?.count > 4);
@@ -426,7 +496,13 @@ if (import.meta.env.DEV) {
         }
       }
       return {
-        selected: routeInspectionPlane.selectedBus?.callsign || null,
+        selected: routeInspectionPlane.route ? `LINE ${routeInspectionPlane.route.line}` : null,
+        stops: routeInspectionPlane.stops.length,
+        stopNames: routeInspectionPlane.stops.slice(0, 4).map(s => s.name),
+        tripStatus: routeInspectionPlane.trip ? routeInspectionPlane.tripClock().status : null,
+        busMarker: routeInspectionPlane.busMarker
+          ? routeInspectionPlane.busMarker.position.toArray().map(v => +v.toFixed(3))
+          : null,
         overlayVisible: routeInspectionPlane.group.visible,
         staticChildren: routeInspectionPlane.staticGroup.children.length,
         dynamicChildren: d.children.length,
@@ -434,6 +510,11 @@ if (import.meta.env.DEV) {
         overlayRadius: routeInspectionPlane.overlayRadius,
         routeMaxRadius: +maxR.toFixed(3),
         routeYValues: [...ys],
+        cameraOffset: {
+          current: cameraController.offset.toArray().map(v => +v.toFixed(3)),
+          target: cameraController.targetOffset.toArray().map(v => +v.toFixed(3))
+        },
+        qrVisible: !!document.getElementById('settings-qr')?.complete,
         polarGridInScene: scene.children.includes(polarGrid),
         polarGridChildren: polarGrid.children.length,
         busCount: activeTransitEntities.filter(e => e.type === 'transit').length,
@@ -448,15 +529,23 @@ if (import.meta.env.DEV) {
   if (params.has('inspect')) {
     const idx = parseInt(params.get('inspect'), 10) || 0;
     const timer = setInterval(() => {
-      const buses = activeTransitEntities.filter(e => e.type === 'transit');
+      const buses = activeTransitEntities.filter(e => e.type === 'transit' && e.lineData);
       if (!buses.length) return;
       clearInterval(timer);
-      routeInspectionPlane.selectBus(buses[idx % buses.length]);
+      routeInspectionPlane.selectRoute(buses[idx % buses.length].lineData);
       const el = document.createElement('div');
       el.id = 'debug-state';
       el.style.display = 'none';
-      el.textContent = JSON.stringify(window.__deckDebug.state());
       document.body.appendChild(el);
+      const writeState = () => {
+        el.textContent = JSON.stringify(window.__deckDebug.state());
+      };
+      writeState();
+      setInterval(writeState, 500);
+      // Dev-only: verify the reverse camera transition headlessly.
+      if (params.has('clearafter')) {
+        setTimeout(() => routeInspectionPlane.clear(), parseInt(params.get('clearafter'), 10) || 3000);
+      }
     }, 250);
   }
 }

@@ -1,9 +1,11 @@
+import io
 import os
 import json
+import socket
 import asyncio
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load .env from workspace root or current dir
@@ -42,6 +44,57 @@ async def periodic_traffic_poller():
 @app.get("/api/version")
 async def version_check():
     return {"version": os.getenv("APP_VERSION", "dev")}
+
+
+def _lan_ip() -> str:
+    """Best-effort LAN address of this host (no packets are sent)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
+@app.get("/api/qr/settings")
+async def settings_qr(request: Request):
+    """QR code that opens the settings page over the LAN.
+
+    The URL is built from the request host so it matches whatever address the
+    deck is being viewed on. If the deck is viewed on localhost, the host's LAN
+    address is substituted so a phone can actually reach it.
+    """
+    import qrcode
+    from qrcode.image.svg import SvgPathImage
+
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    hostname, _, port = host.partition(":")
+
+    # The kiosk loads the deck from localhost, and inside a container the
+    # detected "LAN" address would be the container bridge, so an explicit
+    # public host is the only reliable source for a phone-scannable URL.
+    public_host = os.getenv("DECK_PUBLIC_HOST", "").strip()
+    if public_host:
+        hostname = public_host
+    elif hostname in ("", "localhost", "127.0.0.1", "0.0.0.0"):
+        hostname = _lan_ip()
+    port = port or "5173"
+    base = f"http://{hostname}" + (f":{port}" if port else "")
+    url = f"{base}/settings"
+
+    img = qrcode.make(url, image_factory=SvgPathImage, box_size=8, border=1)
+    buf = io.BytesIO()
+    img.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="image/svg+xml",
+        headers={
+            "Cache-Control": "no-store",
+            "X-QR-Target": url,
+        },
+    )
 
 @app.get("/api/health")
 async def health_check():

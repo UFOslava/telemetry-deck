@@ -12,6 +12,14 @@ export class CameraController {
     this.distance = options.distance || 19.5;                     // Tactical distance for 10km radius
     this.center = new THREE.Vector3(0, 0, 0);
 
+    // View offset: a rigid translation applied to BOTH the camera position and
+    // its look-at target. Used to lift the whole view onto the route overlay
+    // plane without changing pitch/distance. Interpolated smoothly.
+    this.offset = new THREE.Vector3(0, 0, 0);
+    this.targetOffset = new THREE.Vector3(0, 0, 0);
+    this.offsetSharpness = options.offsetSharpness !== undefined ? options.offsetSharpness : 3.2;
+    this._lookTarget = new THREE.Vector3();
+
     // Dynamic state
     this.yaw = options.yaw || (-Math.PI / 4); // South-West orientation
     this.targetYaw = this.yaw;
@@ -67,7 +75,26 @@ export class CameraController {
     this.domElement.addEventListener('wheel', onWheel, { passive: true });
   }
 
+  /** Request a new rigid view offset (world units). Smoothly interpolated. */
+  setViewOffset(x, y, z) {
+    this.targetOffset.set(x, y, z);
+  }
+
+  /** Lift camera + target by `height` to frame a plane at that Y. */
+  focusPlane(height) {
+    this.setViewOffset(0, height, 0);
+  }
+
+  clearViewOffset() {
+    this.setViewOffset(0, 0, 0);
+  }
+
   update(deltaTime) {
+    // Exponential smoothing, frame-rate independent.
+    const dt = Math.max(0, Math.min(deltaTime, 0.25));
+    const k = 1 - Math.exp(-this.offsetSharpness * dt);
+    this.offset.lerp(this.targetOffset, k);
+
     const now = performance.now();
     const elapsedSinceInteraction = now - this.lastInteractionTime;
 
@@ -96,8 +123,9 @@ export class CameraController {
     const y = this.distance * sy;
     const z = this.distance * cy * Math.cos(this.yaw);
 
-    this.camera.position.set(x, y, z);
-    this.camera.lookAt(this.center);
+    this.camera.position.set(x + this.offset.x, y + this.offset.y, z + this.offset.z);
+    this._lookTarget.copy(this.center).add(this.offset);
+    this.camera.lookAt(this._lookTarget);
   }
 }
 

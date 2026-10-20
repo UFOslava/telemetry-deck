@@ -86,6 +86,43 @@
       box-shadow: 0 0 14px rgba(0, 229, 255, 0.5);
     }
 
+    /* LAN settings QR (top-right) */
+    #settings-qr-block {
+      position: absolute;
+      top: 58px;
+      right: 20px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      background: rgba(1, 15, 30, 0.72);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      border-radius: 3px;
+      pointer-events: auto;
+      text-decoration: none;
+      color: #70d8ff;
+    }
+    #settings-qr-block:hover {
+      border-color: #00e5ff;
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+    }
+    #settings-qr {
+      width: 76px;
+      height: 76px;
+      display: block;
+      background: #e8fbff;
+      padding: 3px;
+    }
+    .qr-label {
+      font-size: 9px;
+      letter-spacing: 1.2px;
+      line-height: 1.5;
+      color: #70d8ff;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+    }
+
     .hud-bottom-left {
       position: absolute;
       bottom: 20px;
@@ -123,18 +160,81 @@
     /* Elevated Transit Route Inspection Panel */
     #transit-route-panel {
       display: none;
+      flex-direction: column;
       position: absolute;
-      bottom: 24px;
+      top: 150px;
       right: 24px;
-      width: 280px;
+      width: 350px;
+      max-height: calc(100vh - 190px);
       background: rgba(1, 15, 30, 0.92);
       border: 1px solid #00e5ff;
       border-radius: 4px;
-      padding: 14px;
+      padding: 12px 14px;
       z-index: 200;
       box-shadow: 0 0 20px rgba(0, 229, 255, 0.35);
       font-family: inherit;
+      font-size: 11px;
+      color: #e0f7fa;
+      pointer-events: auto;
     }
+    .tt-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #00e5ff;
+      padding-bottom: 6px;
+      margin-bottom: 6px;
+    }
+    .tt-title { font-weight: bold; color: #00e5ff; letter-spacing: 1px; }
+    .tt-close { cursor: pointer; color: #ff6a00; font-size: 18px; line-height: 1; }
+    .tt-agency { color: #ffe600; font-size: 11px; font-weight: bold; }
+    .tt-desc { color: #70d8ff; font-size: 10px; margin-bottom: 6px; line-height: 1.35; }
+    .tt-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 9.5px;
+      color: #9fe8ff;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    #tt-status { color: #00e5ff; font-weight: bold; }
+    .tt-progress {
+      height: 3px;
+      background: rgba(0, 229, 255, 0.15);
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    #tt-progress-bar {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: #00e5ff;
+      box-shadow: 0 0 6px #00e5ff;
+      transition: width 0.6s linear;
+    }
+    .tt-cols, .tt-row {
+      display: grid;
+      grid-template-columns: 22px 1fr 52px 52px 34px;
+      gap: 4px;
+      align-items: baseline;
+    }
+    .tt-cols {
+      font-size: 9px;
+      color: #00e5ff;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.25);
+      padding-bottom: 3px;
+      margin-bottom: 3px;
+      letter-spacing: 0.5px;
+    }
+    .tt-body { overflow-y: auto; font-size: 10px; line-height: 1.5; }
+    .tt-row { padding: 1px 0; }
+    .tt-row.tt-next { background: rgba(0, 229, 255, 0.16); box-shadow: inset 2px 0 0 #00e5ff; }
+    .tt-c1 { color: #ffe600; }
+    .tt-c2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tt-c3 { color: #9fe8ff; }
+    .tt-c4 { color: #ffffff; }
+    .tt-c5 { color: #70d8ff; text-align: right; }
   </style>
 </head>
 <body>
@@ -150,6 +250,11 @@
     </div>
     <button class="hud-btn" id="open-settings-btn">SETTINGS [SYS]</button>
   </div>
+
+  <a id="settings-qr-block" href="/settings" title="Open settings from this LAN">
+    <img id="settings-qr" alt="Settings QR code" />
+    <span class="qr-label">SCAN / SETTINGS</span>
+  </a>
 
   <div class="hud-bottom-left" id="telemetry-readout">
     <div>SURVEILLANCE: ACTIVE</div>

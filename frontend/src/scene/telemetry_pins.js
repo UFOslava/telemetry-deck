@@ -105,7 +105,7 @@ export class TelemetryPinsManager {
             ent.z = -ent.z * 0.95;
           }
         }
-      } else if (ent.roadPath && ent.roadPath.length >= 2) {
+      } else if (ent.roadPath && ent.roadPath.length >= 2 && !ent.scheduleDriven) {
         // Smooth physical pacing along multi-kilometer route
         const pathLen = ent.pathLengthKm || 8.0;
         // Pacing factor: 2.5x real-time speed for realistic visible movement

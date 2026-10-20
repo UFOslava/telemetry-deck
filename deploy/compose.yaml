@@ -10,6 +10,7 @@ services:
       - SETTINGS_FILE=/config/settings.json
       - TomTom_API_Key=${TomTom_API_Key:-}
       - APP_VERSION=${APP_VERSION:-dev}
+      - DECK_PUBLIC_HOST=${DECK_PUBLIC_HOST:-}
     volumes:
       - ./config:/config
     ports:
