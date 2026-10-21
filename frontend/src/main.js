@@ -434,8 +434,17 @@ setInterval(() => {
 // Render Loop
 const clock = new THREE.Clock();
 
-function animate() {
+// The kiosk drives the panel through a DisplayLink dock, whose encoder is
+// CPU-bound and costs roughly pixels x frames. A map that mostly drifts gains
+// nothing from 60 fps, so cap the loop: skipped frames never reach the USB
+// encoder at all.
+const FRAME_INTERVAL_MS = 1000 / 30;
+let lastRenderMs = -Infinity;
+
+function animate(now) {
   requestAnimationFrame(animate);
+  if (now - lastRenderMs < FRAME_INTERVAL_MS - 1) return;
+  lastRenderMs = now;
   const delta = clock.getDelta();
 
   cameraController.update(delta);
