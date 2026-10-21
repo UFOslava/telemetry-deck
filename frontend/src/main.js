@@ -439,12 +439,22 @@ const clock = new THREE.Clock();
 // nothing from 60 fps, so cap the loop: skipped frames never reach the USB
 // encoder at all.
 const FRAME_INTERVAL_MS = 1000 / 30;
-let lastRenderMs = -Infinity;
+let framePending = false;
 
-function animate(now) {
-  requestAnimationFrame(animate);
-  if (now - lastRenderMs < FRAME_INTERVAL_MS - 1) return;
-  lastRenderMs = now;
+// Ask for one frame at a time instead of keeping requestAnimationFrame armed.
+// A permanently-pending rAF callback makes the compositor submit a frame on
+// every vsync even when nothing was drawn — and on this kiosk that means a
+// full-screen encode through the DisplayLink dock 60 times a second.
+function tick() {
+  if (!framePending) {
+    framePending = true;
+    requestAnimationFrame(animate);
+  }
+  setTimeout(tick, FRAME_INTERVAL_MS);
+}
+
+function animate() {
+  framePending = false;
   const delta = clock.getDelta();
 
   cameraController.update(delta);
@@ -559,4 +569,4 @@ if (import.meta.env.DEV) {
   }
 }
 
-animate();
+tick();
