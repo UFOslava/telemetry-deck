@@ -77,6 +77,8 @@ const aaParam = (urlParams.get('aa') || '').toLowerCase();
 const requestedAaMode = ['none', 'fxaa', 'msaa'].includes(aaParam)
   ? aaParam
   : (isTVClient ? 'fxaa' : (currentConfig.aaMode || 'fxaa'));
+// ?bloom=0 removes the UnrealBloomPass entirely (whole extra render-target chain).
+const bloomEnabled = urlParams.get('bloom') !== '0';
 
 // Renderer setup
 const renderer = new THREE.WebGLRenderer({ antialias: requestedAaMode !== 'none', alpha: true });
@@ -84,6 +86,37 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * renderScale);
 renderer.toneMapping = THREE.ReinhardToneMapping;
 container.appendChild(renderer.domElement);
+
+// Optional on-screen diagnostics: ?stats=1 (FPS + real WebGL renderer + buffer size)
+let statsEl = null;
+let statsFrames = 0;
+let statsLast = performance.now();
+let glRendererName = 'n/a';
+if (urlParams.get('stats') === '1') {
+  try {
+    const gl = renderer.getContext();
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    glRendererName = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'no-debug-ext';
+  } catch (e) {
+    glRendererName = 'error';
+  }
+  statsEl = document.createElement('div');
+  statsEl.style.cssText = 'position:fixed;top:8px;left:8px;z-index:2147483647;font:600 14px/1.35 monospace;color:#00e5ff;background:rgba(0,10,20,.78);border:1px solid #00e5ff;padding:6px 8px;pointer-events:none;white-space:pre;text-shadow:0 0 6px #00e5ff';
+  document.body.appendChild(statsEl);
+}
+function updateStats() {
+  if (!statsEl) return;
+  statsFrames += 1;
+  const now = performance.now();
+  const elapsed = now - statsLast;
+  if (elapsed >= 1000) {
+    const fps = (statsFrames * 1000) / elapsed;
+    statsFrames = 0;
+    statsLast = now;
+    const gl = renderer.getContext();
+    statsEl.textContent = `FPS ${fps.toFixed(1)}\n${glRendererName}\nBUFFER ${gl.drawingBufferWidth}x${gl.drawingBufferHeight} | scale ${renderScale} | aa ${requestedAaMode} | bloom ${bloomEnabled ? 'on' : 'off'}`;
+  }
+}
 
 // Scene & Camera
 const scene = new THREE.Scene();
@@ -105,7 +138,8 @@ const composer = setupBloom(
   camera,
   window.innerWidth,
   window.innerHeight,
-  requestedAaMode
+  requestedAaMode,
+  bloomEnabled
 );
 
 // Procedural Polar Grid with 3D North Compass Arrow
@@ -474,6 +508,7 @@ function animate() {
 
   // Render 3D WebGL scene through UnrealBloomPass
   composer.render();
+  updateStats();
 
   // Clear 2D SVG overlay (all text and ISS are now purely 3D WebGL vectors)
   svgOverlay.innerHTML = '';

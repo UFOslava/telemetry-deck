@@ -10,7 +10,7 @@ import * as THREE from 'three';
  * 1. 'fxaa': Fast Approximate Anti-Aliasing (ShaderPass)
  * 2. 'msaa': Hardware Multi-Sample Anti-Aliasing (4x WebGL 2 RenderTarget)
  */
-export function setupBloom(renderer, scene, camera, width, height, aaMode = 'fxaa') {
+export function setupBloom(renderer, scene, camera, width, height, aaMode = 'fxaa', bloomEnabled = true) {
   let renderTarget = undefined;
 
   if (aaMode === 'msaa') {
@@ -27,13 +27,16 @@ export function setupBloom(renderer, scene, camera, width, height, aaMode = 'fxa
   composer.addPass(renderPass);
 
   // Neon cyan/amber holographic bloom configuration
-  const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(width, height),
-    1.6,  // strength
-    0.4,  // radius
-    0.15  // threshold
-  );
-  composer.addPass(bloomPass);
+  let bloomPass = null;
+  if (bloomEnabled) {
+    bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(width, height),
+      1.6,  // strength
+      0.4,  // radius
+      0.15  // threshold
+    );
+    composer.addPass(bloomPass);
+  }
 
   let fxaaPass = null;
   if (aaMode === 'fxaa') {
@@ -46,6 +49,7 @@ export function setupBloom(renderer, scene, camera, width, height, aaMode = 'fxa
   }
 
   composer._fxaaPass = fxaaPass;
+  composer._bloomPass = bloomPass;
   composer._aaMode = aaMode;
 
   return composer;
