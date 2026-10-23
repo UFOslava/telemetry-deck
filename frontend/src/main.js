@@ -60,10 +60,28 @@ document.getElementById('radar-subtext').textContent =
   `ANCHOR: (${currentConfig.centerLat.toFixed(4)}° N, ${currentConfig.centerLon.toFixed(4)}° E) | R: ${currentConfig.radiusKm.toFixed(1)} KM`;
 
 
+// Render budget (TV / low-power clients)
+// Tizen & SmartTV browsers report a huge viewport but have weak GPUs. Rendering the
+// full framebuffer through bloom + MSAA turns the deck into a slideshow there, so TV
+// clients get a reduced internal resolution by default. Override per client:
+//   ?scale=0.25..1   internal resolution multiplier (canvas still fills the screen)
+//   ?aa=none|fxaa|msaa
+const urlParams = new URLSearchParams(window.location.search);
+const isTVClient = /Tizen|SmartTV|SMART-TV|Web0S|HbbTV|BRAVIA|NetCast|Roku/i.test(navigator.userAgent || '');
+const parseScale = (raw, fallback) => {
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0.25, n)) : fallback;
+};
+const renderScale = parseScale(urlParams.get('scale'), isTVClient ? 0.5 : 1);
+const aaParam = (urlParams.get('aa') || '').toLowerCase();
+const requestedAaMode = ['none', 'fxaa', 'msaa'].includes(aaParam)
+  ? aaParam
+  : (isTVClient ? 'fxaa' : (currentConfig.aaMode || 'fxaa'));
+
 // Renderer setup
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const renderer = new THREE.WebGLRenderer({ antialias: requestedAaMode !== 'none', alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * renderScale);
 renderer.toneMapping = THREE.ReinhardToneMapping;
 container.appendChild(renderer.domElement);
 
@@ -87,7 +105,7 @@ const composer = setupBloom(
   camera,
   window.innerWidth,
   window.innerHeight,
-  currentConfig.aaMode || 'fxaa'
+  requestedAaMode
 );
 
 // Procedural Polar Grid with 3D North Compass Arrow
